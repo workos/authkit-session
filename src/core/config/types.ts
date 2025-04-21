@@ -52,6 +52,11 @@ export interface AuthKitConfig {
   cookieMaxAge: number;
 
   /**
+   * The sameSite attribute for the session cookie
+   */
+  cookieSameSite?: 'strict' | 'lax' | 'none';
+
+  /**
    * The name of the session cookie
    * Equivalent to the WORKOS_COOKIE_NAME environment variable
    * Defaults to "wos-session"
