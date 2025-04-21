@@ -1,1 +1,1 @@
-export const foo = 'foo';
+export { getWorkOS } from './core/workos';
