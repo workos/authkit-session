@@ -1,6 +1,5 @@
 import type { AuthenticationResponse, WorkOS } from '@workos-inc/node';
 import { sealData, unsealData } from 'iron-session';
-import type { CookieOptions } from '../../cookie';
 import type { ConfigurationProvider } from '../config/ConfigurationProvider';
 import {
   AuthKitError,
@@ -204,7 +203,6 @@ export class SessionManager<TRequest, TResponse> {
   async createSession(
     authResponse: AuthenticationResponse,
     response: TResponse,
-    options?: CookieOptions,
   ): Promise<TResponse> {
     const { accessToken, refreshToken, user, impersonator } = authResponse;
     if (!accessToken || !refreshToken) {
@@ -220,19 +218,8 @@ export class SessionManager<TRequest, TResponse> {
 
     const encryptedSession = await this.encryptSession(session);
 
-    // Get cookie options
-    const cookieOptions: CookieOptions = {
-      path: '/',
-      maxAge: this.config.getValue('cookieMaxAge'),
-      httpOnly: true,
-      secure: this.config.getValue('apiHttps'),
-      sameSite: this.config.getValue('cookieSameSite') || 'lax',
-      domain: this.config.getValue('cookieDomain'),
-      ...options,
-    };
-
     // Save to response
-    return this.storage.saveSession(response, encryptedSession, cookieOptions);
+    return this.storage.saveSession(response, encryptedSession);
   }
 
   async terminateSession(
@@ -253,7 +240,7 @@ export class SessionManager<TRequest, TResponse> {
     });
 
     return {
-      response,
+      response: clearedResponse,
       logoutUrl,
     };
   }

@@ -1,5 +1,4 @@
 import type { Impersonator, User } from '@workos-inc/node';
-import type { CookieOptions } from '../../cookie';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {
@@ -42,7 +41,7 @@ export interface Session {
   impersonator?: Impersonator;
 }
 
-export interface SessionStorage<TRequest, TResponse> {
+export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
   /*
    * Extract session data from a request object
    * @param request the framework-specific request object.
@@ -60,12 +59,12 @@ export interface SessionStorage<TRequest, TResponse> {
   saveSession(
     response: TResponse,
     sessionData: string,
-    options?: CookieOptions,
+    options?: TOptions,
   ): Promise<TResponse>;
 
   /**
    * @param response The frmework-specific response object.
    * @returns The framework-specific response object with the session cookie removed.
    */
-  clearSession(response: TResponse): Promise<TResponse>;
+  clearSession(response: TResponse, options?: TOptions): Promise<TResponse>;
 }
