@@ -1,3 +1,4 @@
+import { once } from '../utils';
 import { ConfigurationProvider } from './config/ConfigurationProvider';
 import type { AuthKitConfig } from './config/types';
 import { SessionManager } from './session/SessionManager';
@@ -5,7 +6,10 @@ import TokenManager from './session/TokenManager';
 import type { SessionStorage } from './session/types';
 import { getWorkOS } from './workos';
 
-export function createAuthKit<TRequest, TResponse>(options: {
+export const createAuthKit = once(function createAuthKit<
+  TRequest,
+  TResponse,
+>(options: {
   config?: Partial<AuthKitConfig>;
   storage: SessionStorage<TRequest, TResponse>;
 }) {
@@ -45,4 +49,4 @@ export function createAuthKit<TRequest, TResponse>(options: {
     }) =>
       sessionManager.getAuthorizationUrl({ ...options, screenHint: 'sign-up' }),
   };
-}
+});
