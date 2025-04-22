@@ -8,7 +8,12 @@ import {
   TokenRefreshError,
 } from '../errors';
 import type { TokenManager } from './TokenManager';
-import type { AuthResult, Session, SessionStorage } from './types';
+import type {
+  AuthResult,
+  CustomClaims,
+  Session,
+  SessionStorage,
+} from './types';
 
 export class SessionManager<TRequest, TResponse> {
   private readonly config: ConfigurationProvider;
@@ -50,7 +55,9 @@ export class SessionManager<TRequest, TResponse> {
     }
   }
 
-  private async validateSession<TCustomClaims = {}>(encryptedSession: string) {
+  private async validateSession<TCustomClaims = CustomClaims>(
+    encryptedSession: string,
+  ) {
     try {
       const session = await this.decryptSession(encryptedSession);
 
@@ -106,7 +113,7 @@ export class SessionManager<TRequest, TResponse> {
     }
   }
 
-  async withAuth<TCustomClaims = {}>(
+  async withAuth<TCustomClaims = CustomClaims>(
     request: TRequest,
   ): Promise<AuthResult<TCustomClaims>> {
     const encryptedSession = await this.storage.getSession(request);
@@ -124,18 +131,14 @@ export class SessionManager<TRequest, TResponse> {
 
     return {
       user: session.user,
-      sessionId: claims.sid as string, // FIXME
-      organizationId: claims.org_id,
-      role: claims.role,
-      permissions: claims.permissions,
-      entitlements: claims.entitlements,
+      sessionId: claims.sid,
       impersonator: session.impersonator,
       accessToken: session.accessToken,
-      ...claims, // FIXME
+      claims,
     };
   }
 
-  async refreshSession<TCustomClaims = {}>(session: Session) {
+  async refreshSession<TCustomClaims = CustomClaims>(session: Session) {
     try {
       const currentClaims = this.tokenManager.parseTokenClaims(
         session.accessToken,
@@ -144,7 +147,7 @@ export class SessionManager<TRequest, TResponse> {
         await this.client.userManagement.authenticateWithRefreshToken({
           refreshToken: session.refreshToken,
           clientId: this.config.getValue('clientId'),
-          organizationId: currentClaims.org_id as string, // FIXME
+          organizationId: currentClaims.org_id,
         });
 
       const newSession: Session = {
@@ -245,7 +248,7 @@ export class SessionManager<TRequest, TResponse> {
     const claims = this.tokenManager.parseTokenClaims(session.accessToken);
 
     const logoutUrl = this.client.userManagement.getLogoutUrl({
-      sessionId: claims.sid as string, // FIXME
+      sessionId: claims.sid,
       returnTo: options?.returnTo,
     });
 

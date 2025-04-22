@@ -1,11 +1,7 @@
-import {
-  createRemoteJWKSet,
-  decodeJwt,
-  jwtVerify,
-  type JWTPayload,
-} from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { getWorkOS } from '../workos';
 import { once } from '../../utils';
+import type { BaseTokenClaims, CustomClaims } from './types';
 
 export class TokenManager {
   clientId: string;
@@ -29,9 +25,11 @@ export class TokenManager {
     }
   }
 
-  parseTokenClaims<T = {}>(token: string): T & JWTPayload {
+  parseTokenClaims<TCustomClaims = CustomClaims>(
+    token: string,
+  ): BaseTokenClaims & TCustomClaims {
     try {
-      return decodeJwt<T>(token);
+      return decodeJwt<BaseTokenClaims & TCustomClaims>(token);
     } catch (error) {
       throw new Error('Invalid token');
     }

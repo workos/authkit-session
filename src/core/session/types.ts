@@ -1,7 +1,8 @@
 import type { Impersonator, User } from '@workos-inc/node';
 import type { CookieOptions } from '../../cookie';
+import type { JWTPayload } from 'jose';
 
-export interface BaseTokenClaims {
+export interface BaseTokenClaims extends JWTPayload {
   sid: string;
   org_id?: string;
   role?: string;
@@ -9,9 +10,13 @@ export interface BaseTokenClaims {
   entitlements?: string[];
 }
 
-export interface AuthResult<TCustomClaims = {}> {
+export type CustomClaims = Record<string, unknown>;
+
+export interface AuthResult<TCustomClaims = Record<string, unknown>> {
   user?: User | null;
   claims?: BaseTokenClaims & TCustomClaims;
+  impersonator?: Impersonator;
+  accessToken?: string;
   sessionId?: string;
 }
 
