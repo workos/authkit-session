@@ -61,3 +61,7 @@ export function getConfig<K extends keyof AuthKitConfig>(
   const config = getConfigurationInstance();
   return config.getValue(key);
 }
+
+export function getConfigurationProvider(): ConfigurationProvider {
+  return getConfigurationInstance();
+}

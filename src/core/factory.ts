@@ -1,4 +1,5 @@
 import { once } from '../utils';
+import { configure, getConfig, getConfigurationProvider } from './config';
 import { ConfigurationProvider } from './config/ConfigurationProvider';
 import type { AuthKitConfig } from './config/types';
 import { SessionManager } from './session/SessionManager';
@@ -14,18 +15,16 @@ export const createAuthKit = once(function createAuthKit<
   storage: SessionStorage<TRequest, TResponse>;
 }) {
   const { config, storage } = options;
-  const configProvider = new ConfigurationProvider();
 
   if (config) {
-    console.log('CONFIGURING', config);
-    configProvider.configure(config);
+    configure(config);
   }
 
   const workos = getWorkOS();
 
-  const tokenManager = new TokenManager(configProvider.getValue('clientId'));
+  const tokenManager = new TokenManager(getConfig('clientId'));
   const sessionManager = new SessionManager<TRequest, TResponse>(
-    configProvider,
+    getConfigurationProvider(),
     options.storage,
     tokenManager,
     workos,
