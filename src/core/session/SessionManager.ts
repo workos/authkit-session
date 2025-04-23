@@ -1,11 +1,12 @@
-import type { AuthenticationResponse, WorkOS } from '@workos-inc/node';
-import { sealData, unsealData } from 'iron-session';
+// import { sealData, unsealData } from 'iron-session';
+import * as Iron from 'iron-webcrypto';
 import type { ConfigurationProvider } from '../config/ConfigurationProvider';
 import {
   AuthKitError,
   SessionEcnryptionError,
   TokenRefreshError,
 } from '../errors';
+import type { UserManagement } from '../workos/UserManagement';
 import type { TokenManager } from './TokenManager';
 import type {
   AuthResult,
@@ -13,18 +14,19 @@ import type {
   Session,
   SessionStorage,
 } from './types';
+import type { AuthenticationResponse } from '../workos/types';
 
 export class SessionManager<TRequest, TResponse> {
   private readonly config: ConfigurationProvider;
   private readonly storage: SessionStorage<TRequest, TResponse>;
   private readonly tokenManager: TokenManager;
-  private readonly client: WorkOS;
+  private readonly client: UserManagement;
 
   constructor(
     config: ConfigurationProvider,
     storage: SessionStorage<TRequest, TResponse>,
     tokenManager: TokenManager,
-    client: WorkOS,
+    client: UserManagement,
   ) {
     this.config = config;
     this.storage = storage;
@@ -35,7 +37,13 @@ export class SessionManager<TRequest, TResponse> {
   private async encryptSession(session: Session): Promise<string> {
     try {
       const password = this.config.getValue('cookiePassword');
-      const encryptedSession = await sealData(session, { password });
+      // const encryptedSession = await sealData(session, { password });
+      const encryptedSession = await Iron.seal(
+        globalThis.crypto,
+        session,
+        password,
+        Iron.defaults,
+      );
       return encryptedSession;
     } catch (error) {
       throw new SessionEcnryptionError('Failed to encrypt session', error);
@@ -45,9 +53,15 @@ export class SessionManager<TRequest, TResponse> {
   private async decryptSession(encryptedSession: string): Promise<Session> {
     try {
       const password = this.config.getValue('cookiePassword');
-      const session = await unsealData<Session>(encryptedSession, {
+      // const session = await unsealData<Session>(encryptedSession, {
+      //   password,
+      // });
+      const session = (await Iron.unseal(
+        globalThis.crypto,
+        encryptedSession,
         password,
-      });
+        Iron.defaults,
+      )) as Session;
       return session;
     } catch (error) {
       throw new SessionEcnryptionError('Failed to decrypt session', error);
@@ -142,12 +156,11 @@ export class SessionManager<TRequest, TResponse> {
       const currentClaims = this.tokenManager.parseTokenClaims(
         session.accessToken,
       );
-      const refreshResponse =
-        await this.client.userManagement.authenticateWithRefreshToken({
-          refreshToken: session.refreshToken,
-          clientId: this.config.getValue('clientId'),
-          organizationId: currentClaims.org_id,
-        });
+      const refreshResponse = await this.client.authenticateWithRefreshToken({
+        refreshToken: session.refreshToken,
+        clientId: this.config.getValue('clientId'),
+        organizationId: currentClaims.org_id,
+      });
 
       const newSession: Session = {
         accessToken: refreshResponse.accessToken,
@@ -189,7 +202,7 @@ export class SessionManager<TRequest, TResponse> {
     redirectUri?: string;
     screenHint?: 'sign-up' | 'sign-in';
   }): Promise<string> {
-    return this.client.userManagement.getAuthorizationUrl({
+    return this.client.getAuthorizationUrl({
       provider: 'authkit',
       redirectUri: redirectUri ?? this.config.getValue('redirectUri'),
       screenHint,
@@ -234,7 +247,7 @@ export class SessionManager<TRequest, TResponse> {
 
     const claims = this.tokenManager.parseTokenClaims(session.accessToken);
 
-    const logoutUrl = this.client.userManagement.getLogoutUrl({
+    const logoutUrl = this.client.getLogoutUrl({
       sessionId: claims.sid,
       returnTo: options?.returnTo,
     });

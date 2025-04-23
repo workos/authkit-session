@@ -17,7 +17,7 @@
     "outDir": "dist",
     "sourceMap": true,
     "declaration": true,
-    "lib": ["es2022"],
+    "lib": ["es2022", "dom"],
     "types": ["node", "chrome"]
   },
   "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.json", "src/**/*.d.ts"]

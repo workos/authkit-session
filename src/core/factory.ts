@@ -4,7 +4,7 @@ import type { AuthKitConfig } from './config/types';
 import { SessionManager } from './session/SessionManager';
 import TokenManager from './session/TokenManager';
 import type { SessionStorage } from './session/types';
-import { getWorkOS } from './workos';
+import { getWorkOS } from './workos/client';
 
 export const createAuthKit = once(function createAuthKit<
   TRequest,
@@ -17,6 +17,7 @@ export const createAuthKit = once(function createAuthKit<
   const configProvider = new ConfigurationProvider();
 
   if (config) {
+    console.log('CONFIGURING', config);
     configProvider.configure(config);
   }
 
