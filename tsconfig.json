@@ -20,11 +20,5 @@
     "lib": ["es2022"],
     "types": ["node", "chrome"]
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.js",
-    "src/**/*.json",
-    "src/**/*.d.ts"
-  ],
-]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.json", "src/**/*.d.ts"]
 }
