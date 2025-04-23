@@ -6,6 +6,8 @@ import {
   SessionEcnryptionError,
   TokenRefreshError,
 } from '../errors';
+import { sealData, unsealData } from '../iron';
+import type { AuthenticationResponse } from '../workos/types';
 import type { UserManagement } from '../workos/UserManagement';
 import type { TokenManager } from './TokenManager';
 import type {
@@ -14,7 +16,6 @@ import type {
   Session,
   SessionStorage,
 } from './types';
-import type { AuthenticationResponse } from '../workos/types';
 
 export class SessionManager<TRequest, TResponse> {
   private readonly config: ConfigurationProvider;
@@ -38,12 +39,7 @@ export class SessionManager<TRequest, TResponse> {
     try {
       const password = this.config.getValue('cookiePassword');
       // const encryptedSession = await sealData(session, { password });
-      const encryptedSession = await Iron.seal(
-        globalThis.crypto,
-        session,
-        password,
-        Iron.defaults,
-      );
+      const encryptedSession = await sealData(session, password);
       return encryptedSession;
     } catch (error) {
       throw new SessionEcnryptionError('Failed to encrypt session', error);
@@ -54,36 +50,7 @@ export class SessionManager<TRequest, TResponse> {
     try {
       const password = this.config.getValue('cookiePassword');
       console.log('PASSWORD', password);
-      // const session = await unsealData<Session>(encryptedSession, {
-      //   password,
-      // });
-      const options = {
-        encryption: {
-          saltBits: 256,
-          algorithm: 'aes-256-cbc',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        integrity: {
-          saltBits: 256,
-          algorithm: 'sha256',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        ttl: 0,
-        timestampSkewSec: 60,
-        localtimeOffsetMsec: 0,
-      };
-      const session = (await this.decryptIronSessionData(
-        encryptedSession,
-        password,
-      )) as Session;
-      // const session = (await Iron.unseal(
-      //   globalThis.crypto,
-      //   encryptedSession,
-      //   password,
-      //   options as any,
-      // )) as Session;
+      const session = await unsealData<Session>(encryptedSession, password);
       console.log('SESSION', session);
       return session;
     } catch (error) {
