@@ -54,12 +54,10 @@ export class SessionManager<TRequest, TResponse> {
   private async decryptSession(encryptedSession: string): Promise<Session> {
     try {
       const password = this.config.getValue('cookiePassword');
-      console.log('PASSWORD', password);
       const session = await this.encryption.unsealData<Session>(
         encryptedSession,
         { password },
       );
-      console.log('SESSION', session);
       return session;
     } catch (error) {
       console.error('Detailed error:', error);
@@ -129,7 +127,6 @@ export class SessionManager<TRequest, TResponse> {
     request: TRequest,
   ): Promise<AuthResult<TCustomClaims>> {
     const encryptedSession = await this.storage.getSession(request);
-    console.log('encryptedSession', encryptedSession);
 
     if (!encryptedSession) {
       return { user: null };
@@ -138,13 +135,6 @@ export class SessionManager<TRequest, TResponse> {
     const { valid, session, claims, error } =
       await this.validateSession<TCustomClaims>(encryptedSession);
 
-    console.log({
-      valid,
-      session,
-      claims,
-      error,
-      refreshToken: session?.refreshToken,
-    });
     if (!valid || !session || !claims) {
       return { user: null };
     }
