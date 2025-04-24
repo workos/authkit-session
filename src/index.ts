@@ -1,4 +1,4 @@
-export { getWorkOS } from './core/workos/client';
+export { getWorkOS } from './core/client/client';
 export { configure, getConfig } from './core/config';
 export { SessionManager } from './core/session/SessionManager';
 export { CookieSessionStorage } from './core/session/CookieSessionStorage';

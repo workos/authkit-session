@@ -1,4 +1,4 @@
-import type { Impersonator, User } from '../workos/types';
+import type { Impersonator, User } from '../client/types';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {
@@ -67,4 +67,20 @@ export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
    * @returns The framework-specific response object with the session cookie removed.
    */
   clearSession(response: TResponse, options?: TOptions): Promise<TResponse>;
+}
+
+export interface SessionEncryption {
+  sealData: (
+    data: unknown,
+    options: {
+      password: string;
+      ttl?: number | undefined;
+    },
+  ) => Promise<string>;
+  unsealData: <T>(
+    encryptedData: string,
+    options: {
+      password: string;
+    },
+  ) => Promise<T>;
 }

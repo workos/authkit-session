@@ -1,7 +1,7 @@
-// src/core/workos.ts
+import { version } from '../../../package.json';
+import { WorkOSLite } from './WorkOSLite';
 import { once } from '../../utils';
 import { getConfig } from '../config';
-import { UserManagement } from './UserManagement';
 
 /**
  * Create a WorkOS instance with the provided API key and optional settings.
@@ -23,12 +23,13 @@ export function createWorkOSInstance() {
     clientId,
     appInfo: {
       name: 'authkit-ssr',
-      version: '0.0.1', // You could import this from package.json if needed
+      version,
     },
   };
 
   // Initialize the WorkOS client with config values
-  const workos = new UserManagement(apiKey, options);
+  // TODO: allow tihs to use the client from @workos-inc/node
+  const workos = new WorkOSLite(apiKey, options);
 
   return workos;
 }

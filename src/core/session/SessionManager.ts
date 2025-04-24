@@ -6,9 +6,7 @@ import {
   SessionEcnryptionError,
   TokenRefreshError,
 } from '../errors';
-import { sealData, unsealData } from '../iron';
-import type { AuthenticationResponse } from '../workos/types';
-import type { UserManagement } from '../workos/UserManagement';
+import type { AuthenticationResponse, WorkOSClient } from '../client/types';
 import type { TokenManager } from './TokenManager';
 import type {
   AuthResult,
@@ -16,30 +14,37 @@ import type {
   Session,
   SessionStorage,
 } from './types';
+import type { SessionEncryption } from './types';
 
 export class SessionManager<TRequest, TResponse> {
   private readonly config: ConfigurationProvider;
   private readonly storage: SessionStorage<TRequest, TResponse>;
   private readonly tokenManager: TokenManager;
-  private readonly client: UserManagement;
+  private readonly client: WorkOSClient;
+  private readonly encryption: SessionEncryption;
 
   constructor(
     config: ConfigurationProvider,
     storage: SessionStorage<TRequest, TResponse>,
     tokenManager: TokenManager,
-    client: UserManagement,
+    client: WorkOSClient,
+    encryption: SessionEncryption,
   ) {
     this.config = config;
     this.storage = storage;
     this.tokenManager = tokenManager;
     this.client = client;
+    this.encryption = encryption;
   }
 
   private async encryptSession(session: Session): Promise<string> {
     try {
       const password = this.config.getValue('cookiePassword');
       // const encryptedSession = await sealData(session, { password });
-      const encryptedSession = await sealData(session, password);
+      const encryptedSession = await this.encryption.sealData(session, {
+        password,
+        ttl: 0,
+      });
       return encryptedSession;
     } catch (error) {
       throw new SessionEcnryptionError('Failed to encrypt session', error);
@@ -50,7 +55,10 @@ export class SessionManager<TRequest, TResponse> {
     try {
       const password = this.config.getValue('cookiePassword');
       console.log('PASSWORD', password);
-      const session = await unsealData<Session>(encryptedSession, password);
+      const session = await this.encryption.unsealData<Session>(
+        encryptedSession,
+        { password },
+      );
       console.log('SESSION', session);
       return session;
     } catch (error) {
@@ -155,11 +163,12 @@ export class SessionManager<TRequest, TResponse> {
       const currentClaims = this.tokenManager.parseTokenClaims(
         session.accessToken,
       );
-      const refreshResponse = await this.client.authenticateWithRefreshToken({
-        refreshToken: session.refreshToken,
-        clientId: this.config.getValue('clientId'),
-        organizationId: currentClaims.org_id,
-      });
+      const refreshResponse =
+        await this.client.userManagement.authenticateWithRefreshToken({
+          refreshToken: session.refreshToken,
+          clientId: this.config.getValue('clientId'),
+          organizationId: currentClaims.org_id,
+        });
 
       const newSession: Session = {
         accessToken: refreshResponse.accessToken,
@@ -201,7 +210,7 @@ export class SessionManager<TRequest, TResponse> {
     redirectUri?: string;
     screenHint?: 'sign-up' | 'sign-in';
   }): Promise<string> {
-    return this.client.getAuthorizationUrl({
+    return this.client.userManagement.getAuthorizationUrl({
       provider: 'authkit',
       redirectUri: redirectUri ?? this.config.getValue('redirectUri'),
       screenHint,
@@ -246,7 +255,7 @@ export class SessionManager<TRequest, TResponse> {
 
     const claims = this.tokenManager.parseTokenClaims(session.accessToken);
 
-    const logoutUrl = this.client.getLogoutUrl({
+    const logoutUrl = this.client.userManagement.getLogoutUrl({
       sessionId: claims.sid,
       returnTo: options?.returnTo,
     });
@@ -255,89 +264,5 @@ export class SessionManager<TRequest, TResponse> {
       response: clearedResponse,
       logoutUrl,
     };
-  }
-
-  /**
-   * Custom adapter to decrypt iron-session data
-   */
-  async decryptIronSessionData(encryptedData: string, password: string) {
-    // Ensure we have the crypto object
-    const crypto = globalThis.crypto;
-
-    // Split the sealed data to analyze its format
-    const parts = encryptedData.split('*');
-    console.log('Parts length:', parts.length);
-    console.log('Prefix:', parts[0]);
-
-    // Extract the necessary components manually
-    // Format should be: Fe26.2*[id]*[encryptionSalt]*[iv]*[encryptedB64]*[exp]*[hmacSalt]*[hmac]
-    if (parts.length !== 8) {
-      throw new Error(`Invalid format: expected 8 parts, got ${parts.length}`);
-    }
-
-    // Manually reconstruct the data for decryption
-    const prefix = parts[0];
-    const passwordId = parts[1] || '';
-    const encryptionSalt = parts[2];
-    const iv = parts[3];
-    const encryptedB64 = parts[4];
-    const expiration = parts[5];
-    const hmacSalt = parts[6];
-    const hmacSignature = parts[7];
-
-    // We'll try a hybrid approach - use iron-webcrypto but with our own adaptation
-
-    try {
-      // Attempt using the regular unseal with explicit options
-      return await Iron.unseal(crypto, encryptedData, password, {
-        encryption: {
-          saltBits: 256,
-          algorithm: 'aes-256-cbc',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        integrity: {
-          saltBits: 256,
-          algorithm: 'sha256',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        ttl: 0,
-        timestampSkewSec: 60,
-        localtimeOffsetMsec: 0,
-      });
-    } catch (error) {
-      console.error('First attempt failed:', error);
-
-      // If that fails, try a more direct approach using the lower-level functions
-      try {
-        // We'll need to manually:
-        // 1. Decrypt the data using the encryption components
-        // 2. Skip the HMAC verification since that's where it's failing
-
-        // Prepare the decryption options
-        const decryptOptions = {
-          algorithm: 'aes-256-cbc',
-          iterations: 1,
-          minPasswordlength: 32,
-          salt: encryptionSalt,
-          iv: Iron.base64urlDecode(iv!),
-        };
-
-        // Use the decrypt function directly
-        const decrypted = await Iron.decrypt(
-          crypto,
-          password,
-          decryptOptions as any,
-          Iron.base64urlDecode(encryptedB64!),
-        );
-
-        // Parse the JSON result
-        return JSON.parse(decrypted);
-      } catch (innerError) {
-        console.error('Manual decryption failed:', innerError);
-        throw innerError;
-      }
-    }
   }
 }

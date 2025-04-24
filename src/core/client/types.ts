@@ -1,3 +1,38 @@
+export interface UserManagementInterface {
+  getAuthorizationUrl: (options: AuthorizationURLOptions) => string;
+  authenticateWithCode: (
+    options: AuthenticateWithCodeOptions,
+  ) => Promise<AuthenticationResponse>;
+  authenticateWithRefreshToken: (
+    options: AuthenticateWithRefreshTokenOptions,
+  ) => Promise<AuthenticationResponse>;
+  getLogoutUrl: (optoions: { sessionId: string; returnTo?: string }) => string;
+}
+
+export interface WorkOSClientConstructor {
+  new (apiKey: string, options?: WorkOSOptions): WorkOSClient;
+}
+
+export interface WorkOSClient {
+  userManagement: UserManagementInterface;
+  getJwksUrl: (clientId: string) => string;
+}
+
+export interface AppInfo {
+  name: string;
+  version: string;
+}
+
+export interface WorkOSOptions {
+  apiHostname?: string;
+  https?: boolean;
+  port?: number;
+  config?: RequestInit;
+  appInfo?: AppInfo;
+  fetchFn?: typeof fetch;
+  clientId?: string;
+}
+
 export interface User {
   object: string;
   id: string;

@@ -1,38 +1,28 @@
+import type { WorkOSOptions } from '@workos-inc/node';
 import HttpClient from '../../HttpClient';
 import type {
-  AuthenticationResponse,
-  AuthenticateWithRefreshTokenOptions,
   AuthenticateWithCodeOptions,
   AuthenticateWithEmailVerificationOptions,
+  AuthenticateWithRefreshTokenOptions,
+  AuthenticationResponse,
   AuthorizationURLOptions,
+  UserManagementInterface,
+  WorkOSClient,
 } from './types';
-
-export class UserManagement {
+export class UserManagement implements UserManagementInterface {
   private client: HttpClient;
   private baseURL: string;
   private key: string;
-  readonly clientId: string | undefined;
-  // readonly ironSessionProvider: IronSessionProvider;
 
   constructor(
     apiKey: string,
+    baseURL: string,
     options: {
-      apiHostname?: string;
-      https?: boolean;
-      port?: number;
-      clientId?: string;
       appInfo?: { name: string; version: string };
     } = {},
   ) {
     this.key = apiKey;
-    this.clientId = options.clientId;
-
-    const hostname = options.apiHostname || 'api.workos.com';
-    const protocol = options.https !== false ? 'https' : 'http';
-    const port = options.port ? `:${options.port}` : '';
-
-    this.baseURL = `${protocol}://${hostname}${port}`;
-    // this.ironSessionProvider = new IronSessionProvider();
+    this.baseURL = baseURL;
 
     this.client = new HttpClient({
       baseUrl: this.baseURL,
@@ -60,7 +50,7 @@ export class UserManagement {
     return searchParams.toString();
   }
 
-  getJwksUrl(clientId: string): string {
+  async getJwksUrl(clientId: string): Promise<string> {
     if (!clientId) {
       throw TypeError('clientId must be a valid clientId');
     }
@@ -215,5 +205,28 @@ export class UserManagement {
       impersonator: data.impersonator,
       authenticationMethod: data.authentication_method,
     };
+  }
+}
+
+export class WorkOSLite implements WorkOSClient {
+  protected apiKey: string;
+  protected baseURL: string;
+  public userManagement: UserManagementInterface;
+
+  constructor(apiKey: string, options: WorkOSOptions) {
+    this.apiKey = apiKey;
+    const hostname = options.apiHostname || 'api.workos.com';
+    const protocol = options.https !== false ? 'https' : 'http';
+    const port = options.port ? `:${options.port}` : '';
+    this.baseURL = `${protocol}://${hostname}${port}`;
+    this.userManagement = new UserManagement(this.apiKey, this.baseURL);
+  }
+
+  getJwksUrl(clientId: string): string {
+    if (!clientId) {
+      throw TypeError('clientId must be a valid clientId');
+    }
+
+    return `${this.baseURL}/sso/jwks/${clientId}`;
   }
 }
