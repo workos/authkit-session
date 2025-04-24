@@ -12,6 +12,7 @@ export interface BaseTokenClaims extends JWTPayload {
 export type CustomClaims = Record<string, unknown>;
 
 export interface AuthResult<TCustomClaims = Record<string, unknown>> {
+  refreshToken?: string;
   user?: User | null;
   claims?: BaseTokenClaims & TCustomClaims;
   impersonator?: Impersonator;

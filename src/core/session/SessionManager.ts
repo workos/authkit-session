@@ -132,7 +132,7 @@ export class SessionManager<TRequest, TResponse> {
       return { user: null };
     }
 
-    const { valid, session, claims, error } =
+    const { valid, session, claims } =
       await this.validateSession<TCustomClaims>(encryptedSession);
 
     if (!valid || !session || !claims) {
@@ -144,6 +144,7 @@ export class SessionManager<TRequest, TResponse> {
       sessionId: claims.sid,
       impersonator: session.impersonator,
       accessToken: session.accessToken,
+      refreshToken: session.refreshToken, // TODO should this be here?
       claims,
     };
   }

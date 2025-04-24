@@ -12,10 +12,11 @@ export const createAuthKit = once(function createAuthKit<
   TRequest,
   TResponse,
 >(options: {
+  // FIXME this shouldn't be here. The user will configure, not the wrapping library
   config?: Partial<AuthKitConfig>;
   storage: SessionStorage<TRequest, TResponse>;
-  client: WorkOSClient;
-  encryption: SessionEncryption;
+  client?: WorkOSClient;
+  encryption?: SessionEncryption;
 }) {
   const { config, storage, encryption = new WebSessionEncryption() } = options;
 
