@@ -1,4 +1,4 @@
-import * as Iron from 'iron-webcrypto';
+import { seal as sealData, unseal as unsealData } from 'iron-webcrypto';
 import type { SessionEncryption as SessionEncryptionInterface } from './session/types';
 
 /**
@@ -8,9 +8,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
   private readonly versionDelimiter = '~';
   private readonly currentMajorVersion = 2;
 
-  /**
-   * Parse an iron-session seal to extract the version
-   */
+  // Parse an iron-session seal to extract the version
   private parseSeal(seal: string): {
     sealWithoutVersion: string;
     tokenVersion: number | null;
@@ -23,9 +21,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     return { sealWithoutVersion, tokenVersion };
   }
 
-  /**
-   * Encrypt data in a way that's compatible with iron-session
-   */
+  // Encrypt data in a way that's compatible with iron-session
   async sealData(
     data: unknown,
     { password, ttl = 0 }: { password: string; ttl?: number | undefined },
@@ -37,7 +33,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     };
 
     // Seal the data using iron-webcrypto with properly formatted password
-    const seal = await Iron.seal(globalThis.crypto, data, passwordObj, {
+    const seal = await sealData(globalThis.crypto, data, passwordObj, {
       encryption: {
         saltBits: 256,
         algorithm: 'aes-256-cbc',
@@ -59,9 +55,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     return `${seal}${this.versionDelimiter}${this.currentMajorVersion}`;
   }
 
-  /**
-   * Decrypt data from iron-session with HMAC verification
-   */
+  // Decrypt data from iron-session with HMAC verification
   async unsealData<T = unknown>(
     encryptedData: string,
     { password }: { password: string },
@@ -73,7 +67,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     const passwordMap = { 1: password };
 
     // Use iron-webcrypto's unseal function
-    const data = await Iron.unseal(
+    const data = await unsealData(
       globalThis.crypto,
       sealWithoutVersion,
       passwordMap,

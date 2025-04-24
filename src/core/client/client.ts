@@ -28,7 +28,7 @@ export function createWorkOSInstance() {
   };
 
   // Initialize the WorkOS client with config values
-  // TODO: allow tihs to use the client from @workos-inc/node
+  // TODO: allow this to use the client from @workos-inc/node
   const workos = new WorkOSLite(apiKey, options);
 
   return workos;

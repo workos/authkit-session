@@ -1,8 +1,7 @@
 import { once } from '../utils';
 import { getWorkOS } from './client/client';
 import type { WorkOSClient } from './client/types';
-import { configure, getConfig, getConfigurationProvider } from './config';
-import type { AuthKitConfig } from './config/types';
+import { getConfig, getConfigurationProvider } from './config';
 import { SessionEncryption as WebSessionEncryption } from './iron';
 import { SessionManager } from './session/SessionManager';
 import TokenManager from './session/TokenManager';
@@ -12,46 +11,70 @@ export const createAuthKit = once(function createAuthKit<
   TRequest,
   TResponse,
 >(options: {
-  // FIXME this shouldn't be here. The user will configure, not the wrapping library
-  config?: Partial<AuthKitConfig>;
   storage: SessionStorage<TRequest, TResponse>;
-  client?: WorkOSClient;
-  encryption?: SessionEncryption;
+  encryptionFactory?: () => SessionEncryption;
+  clientFactory?: () => WorkOSClient;
 }) {
-  const { config, storage, encryption = new WebSessionEncryption() } = options;
+  const {
+    storage,
+    clientFactory = () => getWorkOS(),
+    encryptionFactory = () => new WebSessionEncryption(),
+  } = options;
 
-  if (config) {
-    configure(config);
-  }
+  const getTokenManager = once(
+    () => new TokenManager(getConfig('clientId'), clientFactory()),
+  );
 
-  const workos = options.client ?? getWorkOS();
-
-  const tokenManager = new TokenManager(getConfig('clientId'), workos);
-  const sessionManager = new SessionManager<TRequest, TResponse>(
-    getConfigurationProvider(),
-    options.storage,
-    tokenManager,
-    workos,
-    encryption,
+  const getSessionManager = once(
+    () =>
+      new SessionManager<TRequest, TResponse>(
+        getConfigurationProvider(),
+        options.storage,
+        getTokenManager(),
+        clientFactory(),
+        encryptionFactory(),
+      ),
   );
 
   return {
-    withAuth: sessionManager.withAuth.bind(sessionManager),
-    getAuthorizationUrl:
-      sessionManager.getAuthorizationUrl.bind(sessionManager),
-    refreshSession: sessionManager.refreshSession.bind(sessionManager),
+    withAuth: (
+      ...args: Parameters<(typeof SessionManager.prototype)['withAuth']>
+    ) => getSessionManager().withAuth(...args),
+
+    getAuthorizationUrl: (
+      ...args: Parameters<
+        (typeof SessionManager.prototype)['getAuthorizationUrl']
+      >
+    ) => getSessionManager().getAuthorizationUrl(...args),
+
+    refreshSession: (
+      ...args: Parameters<(typeof SessionManager.prototype)['refreshSession']>
+    ) => getSessionManager().refreshSession(...args),
+
     saveSession: storage.saveSession.bind(storage),
+
     getSignInUrl: (options: {
       organizationId?: string;
       loginHint?: string;
       redirectUri?: string;
     }) =>
-      sessionManager.getAuthorizationUrl({ ...options, screenHint: 'sign-in' }),
+      getSessionManager().getAuthorizationUrl({
+        ...options,
+        screenHint: 'sign-in',
+      }),
+
     getSignUpUrl: (options: {
       organizationId?: string;
       loginHint?: string;
       redirectUri?: string;
     }) =>
-      sessionManager.getAuthorizationUrl({ ...options, screenHint: 'sign-up' }),
+      getSessionManager().getAuthorizationUrl({
+        ...options,
+        screenHint: 'sign-up',
+      }),
+
+    getLogoutUrl: (
+      ...args: Parameters<(typeof SessionManager.prototype)['terminateSession']>
+    ) => getSessionManager().terminateSession(...args),
   };
 });
