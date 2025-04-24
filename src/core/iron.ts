@@ -30,8 +30,14 @@ export class SessionEncryption implements SessionEncryptionInterface {
     data: unknown,
     { password, ttl = 0 }: { password: string; ttl?: number | undefined },
   ) {
-    // Seal the data using iron-webcrypto
-    const seal = await Iron.seal(globalThis.crypto, data, password, {
+    // Format password as iron-session expects
+    const passwordObj = {
+      id: '1',
+      secret: password,
+    };
+
+    // Seal the data using iron-webcrypto with properly formatted password
+    const seal = await Iron.seal(globalThis.crypto, data, passwordObj, {
       encryption: {
         saltBits: 256,
         algorithm: 'aes-256-cbc',
@@ -44,7 +50,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
         iterations: 1,
         minPasswordlength: 32,
       },
-      ttl,
+      ttl: ttl * 1000, // Convert seconds to milliseconds
       timestampSkewSec: 60,
       localtimeOffsetMsec: 0,
     });
@@ -60,14 +66,17 @@ export class SessionEncryption implements SessionEncryptionInterface {
     encryptedData: string,
     { password }: { password: string },
   ): Promise<T> {
-    // First, parse the seal to extract the version and get just the seal part
+    // First, parse the seal to extract the version
     const { sealWithoutVersion, tokenVersion } = this.parseSeal(encryptedData);
 
-    // Use iron-webcrypto's unseal function with just the seal part
+    // Format password as a map like iron-session expects
+    const passwordMap = { 1: password };
+
+    // Use iron-webcrypto's unseal function
     const data = await Iron.unseal(
       globalThis.crypto,
-      sealWithoutVersion, // This is the key - use only the part before the version marker
-      password,
+      sealWithoutVersion,
+      passwordMap,
       {
         encryption: {
           saltBits: 256,
@@ -91,8 +100,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     if (tokenVersion === 2) {
       return data as T;
     } else if (tokenVersion !== null) {
-      // Handle older token versions if needed
-      // This matches iron-session's own code
+      // For older token versions, extract the persistent property
       return { ...(data as any).persistent } as T;
     }
 
