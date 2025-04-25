@@ -1,6 +1,6 @@
 {
-  "name": "authkit-ssr",
-  "version": "0.0.1",
+  "name": "@workos-inc/authkit-ssr",
+  "version": "0.0.0",
   "description": "",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -16,10 +16,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "WorkOS",
+  "license": "MIT",
   "devDependencies": {
-    "@types/chrome": "^0.0.316",
     "@types/node": "22.14.1",
     "prettier": "^3.5.3",
     "tsup": "^8.4.0",
