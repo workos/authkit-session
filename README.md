@@ -1,246 +1,177 @@
-# AuthKit SSR
+# @workos-inc/authkit-ssr
 
-## Core Module Design
+> [!WARNING]
+>This is prerelease software. APIs may change without notice.
 
-The core should handle all framework-agnostic functionality:
+A framework-agnostic authentication library for WorkOS with a modular adapter system for server-side rendered applications.
 
-1. Session Management
-    - Token encryption/encryption (iron-session)
-    - JWT validation and parsing (jose)
-    - Session Refresh logic
-2. Authentication Logic
-    - WorkOS client instantiation
-    - Authorization URL generation
-    - Token refresh flows
-    - Session termination
-3. Configuration
-    - Environment variable handling
-    - Default options
-    - Type definitions
+## Features
 
-## Adapter System
+- **Framework-agnostic core**: Common authentication logic that works across platforms
+- **Adapter pattern**: Simple interface for framework-specific implementations
+- **Session management**: Secure cookie-based authentication
+- **JWT handling**: Token validation, parsing, and refresh
+- **Type-safe API**: Full TypeScript support
 
-The key innovation is a clean adapter pattern that abstracts framework-specific concepts:
+## Installation
 
-```typescript
-interface StorageAdapter {
-  getSessionData: (request: unknown) => Promise<string | null>;
-  createAuthenticatedResponse: (
-      createResponseData: unknown,
-      sessionData?: string
-  ) => unknown;
+```bash
+# Using npm
+npm install @workos-inc/authkit-ssr
 
-  clearSession: (request: unknown) => Promise<number>;
-}
+# Using pnpm
+pnpm add @workos-inc/authkit-ssr
+
+# Using yarn
+yarn add @workos-inc/authkit-ssr
 ```
 
-Each framework would provide its own implementation:
+## Quick Start
+
+1. Configure AuthKit with your WorkOS credentials:
 
 ```typescript
-// Example Next.js adapter (simplified)
-class NextjsAdapter implements StorageAdapter {
-  getSessionData(request: NextRequest) {
-    return request.cookies.get(cookieName)?.value || null;
+import { configure, createAuthKitFactory } from '@workos-inc/authkit-ssr';
+
+configure({
+  clientId: 'your-client-id',
+  apiKey: 'your-workos-api-key',
+  redirectUri: 'https://yourdomain.com/auth/callback',
+  cookiePassword: 'must-be-at-least-32-characters-long-secret',
+});
+```
+
+2. Create a storage adapter for your framework:
+
+```typescript
+import { SessionStorage, createAuthKitFactory } from '@workos-inc/authkit-ssr';
+
+// Create your framework-specific storage adapter
+class MyFrameworkStorage implements SessionStorage<MyRequest, MyResponse> {
+  cookieName: string;
+  
+  constructor(cookieName = 'wos-session') {
+    this.cookieName = cookieName;
   }
 
-  createAuthenticatedResponse(response, sessionData) {
-    if (sessionData) {
-      response.cookies.set(cookieName, sessionData);
-    }
-    return response;
+  async getSession(request: MyRequest): Promise<string | null> {
+    // Framework-specific implementation to get cookie
+    return getCookieFromRequest(request, this.cookieName);
   }
 
-  clearSession(request) {
-    const response = NextResponse.next();
-    response.cookies.delete(cookieName);
-    return response;
+  async saveSession(response: MyResponse, sessionData: string): Promise<MyResponse> {
+    // Framework-specific implementation to set cookie
+    return setCookieOnResponse(response, this.cookieName, sessionData);
+  }
+
+  async clearSession(response: MyResponse): Promise<MyResponse> {
+    // Framework-specific implementation to clear cookie
+    return clearCookieOnResponse(response, this.cookieName);
   }
 }
+
+// Create your AuthKit instance
+const authKit = createAuthKitFactory<MyRequest, MyResponse>({
+  storage: new MyFrameworkStorage(),
+});
 ```
 
-## Framework Integrations
-
-Each framework implementation would:
-
-1. Implement the storage adapter
-2. Provide frmaework-specific middleware/hooks
-3. Create convenience wrappers and utilities
-
----
-
-# Architectural Challenges & Solutions for AuthKit SSR
-
-## 1. Request/Response Abstraction
-
-### Challenge
-Each framework has unique request/response patterns:
-- Next.js uses `NextRequest` and `NextResponse` objects
-- TanStack Start uses its own system based on web standards
-- Remix has its own request/response pattern
-- Express uses Node's HTTP objects
-
-### Solution Approach
-Create a normalized interface that adapters implement:
+3. Use AuthKit in your application:
 
 ```typescript
-interface RequestAdapter {
-  getCookies(request: unknown): Record<string, string>;
-  getHeaders(request: unknown): Record<string, string>;
-  getUrl(request: unknown): URL;
-}
+// Validate a session
+const { user, claims } = await authKit.withAuth(request);
 
-interface ResponseAdapter {
-  setCookie(response: unknown, name: string, value: string, options: CookieOptions): void;
-  setHeader(response: unknown, name: string, value: string): void;
-}
+// Generate an authorization URL
+const authUrl = await authKit.getAuthorizationUrl({
+  returnPathname: '/dashboard',
+});
+
+// Refresh a session
+const refreshResult = await authKit.refreshSession(session);
 ```
 
-The core would work with these normalized interfaces, while framework-specific adapters handle the translation.
+## Core Concepts
 
-## 2. Middleware Patterns
+### Session Management
 
-### Challenge
-Middleware systems vary significantly across frameworks:
-- Next.js has edge middleware
-- Express has traditional middleware chains
-- TanStack has its own approach
-- Remix uses loaders and actions
+AuthKit SSR uses encrypted cookies to store session information. It handles:
 
-### Solution Approach
-Decouple the core authentication logic from the middleware implementation. The core focuses on:
-- Session validation
-- Token refresh
-- Authorization flows
+- Token encryption/decryption (using iron-webcrypto)
+- JWT validation and parsing
+- Session refresh logic
+- Session termination
 
-Then expose composable building blocks that framework adapters can use within their native patterns:
-- `validateSession(request, options)`
-- `refreshToken(request, options)`
-- `createAuthorizationUrl(options)`
+### Adapter System
 
-This lets each framework handle its own middleware pattern while sharing core logic.
-
-## 3. Environment Access
-
-### Challenge
-Frameworks access environment variables differently:
-- Some use `process.env`
-- Others use platform-specific patterns (Vercel, Netlify, Cloudflare)
-- Some require runtime configuration
-
-### Solution Approach
-Implement a configurable provider pattern:
-
-1. Default to standard `process.env` access
-2. Allow injection of a custom configuration provider:
-   ```typescript
-   configureAuthKit({
-     configProvider: (key) => getYourEnvironmentVariable(key)
-   })
-   ```
-3. Support both imperative and environment-based configuration
-
-This creates flexibility while maintaining simplicity for common cases.
-
-## 4. Redirection Mechanisms
-
-### Challenge
-Each framework handles redirects differently:
-- Next.js: `NextResponse.redirect()` or `redirect()`
-- TanStack: `redirect()` from react-router
-- Express: `res.redirect()`
-
-### Solution Approach
-Create a redirection abstraction that adapters implement:
+The adapter pattern uses a storage interface to abstract framework-specific concepts:
 
 ```typescript
-interface RedirectAdapter {
-  redirect(url: string, options?: RedirectOptions): unknown;
+interface SessionStorage<TRequest, TResponse> {
+  getSession(request: TRequest): Promise<string | null>;
+  saveSession(response: TResponse, sessionData: string): Promise<TResponse>;
+  clearSession(response: TResponse): Promise<TResponse>;
 }
 ```
 
-The core would then call `adapter.redirect()` when needed, leaving implementation details to the framework adapter.
+Each framework adapter implements this interface to handle its specific request/response objects.
 
-## 5. Error Handling 
+## Configuration
 
-### Challenge
-Error handling patterns differ across frameworks:
-- Some use exceptions/throw
-- Others use return values
-- Some have built-in error boundaries
+AuthKit can be configured in multiple ways:
 
-### Solution Approach
-Standardize on a result-based error pattern:
+### Environment Variables
 
-```typescript
-type Result<T> = 
-  | { success: true; data: T }
-  | { success: false; error: AuthKitError }
+```
+WORKOS_CLIENT_ID=your-client-id
+WORKOS_API_KEY=your-api-key
+WORKOS_REDIRECT_URI=https://yourdomain.com/auth/callback
+WORKOS_COOKIE_PASSWORD=must-be-at-least-32-characters-long
 ```
 
-This pattern works with both exception and return-based frameworks while providing structured error information.
-
-## 6. Type Safety
-
-### Challenge
-Maintaining strong typing across different framework integrations.
-
-### Solution Approach
-Use TypeScript generics to maintain type safety:
+### Programmatic Configuration
 
 ```typescript
-// Framework adapters specify their types
-createAuthKit<NextRequest, NextResponse>({
-  adapter: nextAdapter
-})
+import { configure } from '@workos-inc/authkit-ssr';
+
+configure({
+  clientId: 'your-client-id',
+  apiKey: 'your-api-key',
+  redirectUri: 'https://yourdomain.com/auth/callback',
+  cookiePassword: 'must-be-at-least-32-characters-long',
+  cookieName: 'your-custom-cookie-name', // Default: 'wos-session'
+  cookieMaxAge: 60 * 60 * 24 * 30, // 30 days in seconds
+  cookieSameSite: 'lax', // 'strict', 'lax', or 'none'
+});
 ```
 
-This provides type safety while allowing the core to remain framework-agnostic.
+## API Reference
 
-## 7. Storage Mechanisms
+### Core API
 
-### Challenge
-Different platforms have varying capabilities for storing session data:
-- Cookies (size limitations)
-- Server-side storage
-- Edge vs. Node.js environments
+- `configure(config)`: Set up AuthKit with your WorkOS configuration
+- `getConfig(key)`: Get a specific configuration value
+- `createAuthKitFactory(options)`: Create an instance of AuthKit for your framework
 
-### Solution Approach
-Create a storage strategy abstraction:
+### AuthKit Instance API
 
-1. Default to cookie-based storage using iron-session
-2. Allow pluggable storage backends through adapter pattern:
-   ```typescript
-   interface SessionStorage {
-     get(key: string): Promise<T | null>;
-     set(key: string, value: T): Promise<void>;
-     delete(key: string): Promise<void>;
-   }
-   ```
-3. Include built-in adapters for common patterns (cookie, memory, redis)
+- `withAuth(request)`: Validate the current session and return user data
+- `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL
+- `getSignInUrl(options)`: Generate a sign-in URL
+- `getSignUpUrl(options)`: Generate a sign-up URL
+- `refreshSession(session)`: Refresh an existing session
+- `saveSession(response, sessionData)`: Save session data to a response
+- `getLogoutUrl(session, response, options)`: End a user session
 
-## 8. Authentication Flow Customization
+## Security
 
-### Challenge
-Different apps need customized authentication flows:
-- Some require MFA
-- Some need organization selection
-- Some need custom claims or tokens
+AuthKit uses iron-webcrypto for secure, encrypted cookies with the following security features:
 
-### Solution Approach
-Use a hook/event system that allows customization without modifying core:
+- Encrypted cookies (AES-256-CBC)
+- HMAC validation (SHA-256)
+- Customizable cookie settings (HttpOnly, SameSite, etc.)
+- Token refresh mechanism
 
-```typescript
-authKit.on('beforeAuthentication', (context) => {
-  // Modify authentication parameters
-  return context;
-})
+## License
 
-authKit.on('afterAuthentication', (session) => {
-  // Process or enhance session data
-  return session;
-})
-```
-
-This creates extension points for framework-specific needs while maintaining core functionality.
-
-Would you like me to explore any of these areas in more depth?
+MIT
