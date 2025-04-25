@@ -1,38 +1,42 @@
 import { once } from '../utils';
-import { getWorkOS } from './client/client';
+import { getWorkOS } from './client/workosLite';
 import type { WorkOSClient } from './client/types';
-import { getConfig, getConfigurationProvider } from './config';
-import { SessionEncryption as WebSessionEncryption } from './iron';
+import { getConfig, getConfigurationProvider, getFullConfig } from './config';
+import type { AuthKitConfig } from './config/types';
+import sessionEncryption from './encryption/ironWebcryptoEncryption';
 import { SessionManager } from './session/SessionManager';
 import TokenManager from './session/TokenManager';
 import type { SessionEncryption, SessionStorage } from './session/types';
 
-export const createAuthKit = once(function createAuthKit<
+export const createAuthKitFactory = once(function createAuthKit<
   TRequest,
   TResponse,
 >(options: {
-  storage: SessionStorage<TRequest, TResponse>;
-  encryptionFactory?: () => SessionEncryption;
-  clientFactory?: () => WorkOSClient;
+  sessionStorageFactory: (
+    config: AuthKitConfig,
+  ) => SessionStorage<TRequest, TResponse>;
+  sessionEncryptionFactory?: (confg: AuthKitConfig) => SessionEncryption;
+  clientFactory?: (config: AuthKitConfig) => WorkOSClient;
 }) {
   const {
-    storage,
+    sessionStorageFactory,
     clientFactory = () => getWorkOS(),
-    encryptionFactory = () => new WebSessionEncryption(),
+    sessionEncryptionFactory = () => sessionEncryption,
   } = options;
 
   const getTokenManager = once(
-    () => new TokenManager(getConfig('clientId'), clientFactory()),
+    () =>
+      new TokenManager(getConfig('clientId'), clientFactory(getFullConfig())),
   );
 
   const getSessionManager = once(
     () =>
       new SessionManager<TRequest, TResponse>(
         getConfigurationProvider(),
-        options.storage,
+        sessionStorageFactory(getFullConfig()),
         getTokenManager(),
-        clientFactory(),
-        encryptionFactory(),
+        clientFactory(getFullConfig()),
+        sessionEncryptionFactory(getFullConfig()),
       ),
   );
 
@@ -51,7 +55,9 @@ export const createAuthKit = once(function createAuthKit<
       ...args: Parameters<(typeof SessionManager.prototype)['refreshSession']>
     ) => getSessionManager().refreshSession(...args),
 
-    saveSession: storage.saveSession.bind(storage),
+    saveSession: (
+      ...args: Parameters<SessionStorage<TRequest, TResponse>['saveSession']>
+    ) => sessionStorageFactory(getFullConfig()).saveSession(...args),
 
     getSignInUrl: (options: {
       organizationId?: string;

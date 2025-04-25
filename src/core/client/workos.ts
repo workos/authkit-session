@@ -1,7 +1,7 @@
-import { version } from '../../../package.json';
-import { WorkOSLite } from './WorkOSLite';
-import { once } from '../../utils';
+import { WorkOS } from '@workos-inc/node';
 import { getConfig } from '../config';
+import { once } from '../../utils';
+import { version } from '../../../package.json';
 
 /**
  * Create a WorkOS instance with the provided API key and optional settings.
@@ -14,22 +14,19 @@ export function createWorkOSInstance() {
   const apiHostname = getConfig('apiHostname');
   const apiHttps = getConfig('apiHttps');
   const apiPort = getConfig('apiPort');
-  const clientId = getConfig('clientId');
 
   const options = {
     apiHostname,
     https: apiHttps,
     port: apiPort,
-    clientId,
     appInfo: {
-      name: 'authkit-ssr',
+      name: 'authkit-react-router',
       version,
     },
   };
 
   // Initialize the WorkOS client with config values
-  // TODO: allow this to use the client from @workos-inc/node
-  const workos = new WorkOSLite(apiKey, options);
+  const workos = new WorkOS(apiKey, options);
 
   return workos;
 }

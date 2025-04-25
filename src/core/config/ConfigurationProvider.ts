@@ -120,4 +120,8 @@ export class ConfigurationProvider {
 
     return undefined as AuthKitConfig[K];
   }
+
+  getConfig(): AuthKitConfig {
+    return this.config as AuthKitConfig;
+  }
 }
