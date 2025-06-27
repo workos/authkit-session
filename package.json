@@ -1,5 +1,5 @@
 {
-  "name": "@workos-inc/authkit-session",
+  "name": "@workos/authkit-session",
   "version": "0.0.1-alpha.0",
   "description": "",
   "type": "module",

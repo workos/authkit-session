@@ -17,13 +17,13 @@ A framework-agnostic authentication library for WorkOS with a modular adapter sy
 
 ```bash
 # Using npm
-npm install @workos-inc/authkit-session
+npm install @workos/authkit-session
 
 # Using pnpm
-pnpm add @workos-inc/authkit-session
+pnpm add @workos/authkit-session
 
 # Using yarn
-yarn add @workos-inc/authkit-session
+yarn add @workos/authkit-session
 ```
 
 ## Quick Start
@@ -31,7 +31,7 @@ yarn add @workos-inc/authkit-session
 1. Configure AuthKit with your WorkOS credentials:
 
 ```typescript
-import { configure, createAuthKitFactory } from '@workos-inc/authkit-session';
+import { configure, createAuthKitFactory } from '@workos/authkit-session';
 
 configure({
   clientId: 'your-client-id',
@@ -44,8 +44,8 @@ configure({
 2. Create a storage adapter for your framework:
 
 ```typescript
-import { createAuthKitFactory } from '@workos-inc/authkit-session';
-import type { SessionStorage } from '@workos-inc/authkit-session';
+import { createAuthKitFactory } from '@workos/authkit-session';
+import type { SessionStorage } from '@workos/authkit-session';
 
 // Create your framework-specific storage adapter
 class MyFrameworkStorage implements SessionStorage<MyRequest, MyResponse> {
@@ -137,7 +137,7 @@ WORKOS_COOKIE_PASSWORD=must-be-at-least-32-characters-long
 ### Programmatic Configuration
 
 ```typescript
-import { configure } from '@workos-inc/authkit-session';
+import { configure } from '@workos/authkit-session';
 
 configure({
   clientId: 'your-client-id',
