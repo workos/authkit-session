@@ -44,7 +44,8 @@ configure({
 2. Create a storage adapter for your framework:
 
 ```typescript
-import { SessionStorage, createAuthKitFactory } from '@workos-inc/authkit-ssr';
+import { createAuthKitFactory } from '@workos-inc/authkit-ssr';
+import type { SessionStorage } from '@workos-inc/authkit-ssr';
 
 // Create your framework-specific storage adapter
 class MyFrameworkStorage implements SessionStorage<MyRequest, MyResponse> {
@@ -72,7 +73,7 @@ class MyFrameworkStorage implements SessionStorage<MyRequest, MyResponse> {
 
 // Create your AuthKit instance
 const authKit = createAuthKitFactory<MyRequest, MyResponse>({
-  storage: new MyFrameworkStorage(),
+  sessionStorageFactory: (config) => new MyFrameworkStorage(),
 });
 ```
 
@@ -80,15 +81,19 @@ const authKit = createAuthKitFactory<MyRequest, MyResponse>({
 
 ```typescript
 // Validate a session
-const { user, claims } = await authKit.withAuth(request);
+const authResult = await authKit.withAuth(request);
+const { user, claims, accessToken, refreshToken, sessionId, impersonator } = authResult;
 
 // Generate an authorization URL
 const authUrl = await authKit.getAuthorizationUrl({
   returnPathname: '/dashboard',
+  redirectUri: 'https://yourdomain.com/auth/callback',
+  screenHint: 'sign-in', // or 'sign-up'
 });
 
 // Refresh a session
 const refreshResult = await authKit.refreshSession(session);
+const { user, sessionId, organizationId, role, permissions, entitlements, impersonator, accessToken, claims, sessionData, session: newSession } = refreshResult;
 ```
 
 ## Core Concepts
@@ -107,10 +112,10 @@ AuthKit SSR uses encrypted cookies to store session information. It handles:
 The adapter pattern uses a storage interface to abstract framework-specific concepts:
 
 ```typescript
-interface SessionStorage<TRequest, TResponse> {
+interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
   getSession(request: TRequest): Promise<string | null>;
-  saveSession(response: TResponse, sessionData: string): Promise<TResponse>;
-  clearSession(response: TResponse): Promise<TResponse>;
+  saveSession(response: TResponse, sessionData: string, options?: TOptions): Promise<TResponse>;
+  clearSession(response: TResponse, options?: TOptions): Promise<TResponse>;
 }
 ```
 
@@ -155,13 +160,13 @@ configure({
 
 ### AuthKit Instance API
 
-- `withAuth(request)`: Validate the current session and return user data
-- `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL
-- `getSignInUrl(options)`: Generate a sign-in URL
-- `getSignUpUrl(options)`: Generate a sign-up URL
-- `refreshSession(session)`: Refresh an existing session
+- `withAuth(request)`: Validate the current session and return `AuthResult` with user, claims, tokens, and session info
+- `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL with `returnPathname`, `redirectUri`, and `screenHint`
+- `getSignInUrl(options)`: Generate a sign-in URL (calls `getAuthorizationUrl` with `screenHint: 'sign-in'`)
+- `getSignUpUrl(options)`: Generate a sign-up URL (calls `getAuthorizationUrl` with `screenHint: 'sign-up'`)
+- `refreshSession(session)`: Refresh an existing session and return updated session data
 - `saveSession(response, sessionData)`: Save session data to a response
-- `getLogoutUrl(session, response, options)`: End a user session
+- `getLogoutUrl(session, response, options)`: End a user session and return logout URL with updated response
 
 ## Security
 
