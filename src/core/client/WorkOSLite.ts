@@ -34,7 +34,7 @@ export class UserManagement implements UserManagementInterface {
         Authorization: `Bearer ${apiKey}`,
         'User-Agent': options.appInfo
           ? `${options.appInfo.name}/${options.appInfo.version}`
-          : 'authkit-ssr',
+          : 'authkit-session',
       },
     });
   }
@@ -254,7 +254,7 @@ export function createWorkOSInstance() {
     port: apiPort,
     clientId,
     appInfo: {
-      name: 'authkit-ssr',
+      name: 'authkit-session',
       version,
     },
   };
