@@ -42,7 +42,20 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     };
   }
 
-  abstract getSession(request: TRequest): Promise<string | null>;
+  protected abstract getCookie(
+    request: TRequest,
+    name: string,
+  ): string | undefined;
+  protected abstract setCookie(
+    response: TResponse,
+    name: string,
+    value: string,
+    options: CookieOptions,
+  ): TResponse;
+
+  async getSession(request: TRequest): Promise<string | null> {
+    const directValue = this.getCookie(request, this.cookieName);
+  }
 
   abstract saveSession(
     response: TResponse,
