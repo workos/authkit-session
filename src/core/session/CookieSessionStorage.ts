@@ -13,6 +13,17 @@ export interface CookieOptions {
   partitioned?: boolean;
 }
 
+interface Cookie {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+}
+
+const MAX_COOKIE_SIZE = 4096; // Maximum size of a cookie in bytes
+const CHUNK_OVERHEAD = 160; // Overhead for chunking metadata
+const CHUNK_SIZE = MAX_COOKIE_SIZE - CHUNK_OVERHEAD;
+const CHUNK_PATTERN = /\.(\d+)$/;
+
 export abstract class CookieSessionStorage<TRequest, TResponse>
   implements SessionStorage<TRequest, TResponse>
 {
@@ -39,4 +50,94 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
   ): Promise<TResponse>;
 
   abstract clearSession(response: TResponse): Promise<TResponse>;
+
+  protected getChunkedCookieValue(
+    cookies: Record<string, string>,
+  ): string | null {
+    const chunks: Array<[number, string]> = [];
+    let hasChunks = false;
+
+    for (const [name, value] of Object.entries(cookies)) {
+      if (name === this.cookieName) {
+        if (!(`${this.cookieName}.0` in cookies)) {
+          return value || null;
+        }
+      } else if (name.startsWith(`${this.cookieName}.`)) {
+        const [, match] = name.match(CHUNK_PATTERN) ?? [];
+        if (match) {
+          hasChunks = true;
+          chunks.push([parseInt(match, 10), value]);
+        }
+      }
+    }
+
+    if (!hasChunks) {
+      return cookies[this.cookieName] || null;
+    }
+
+    return chunks
+      .sort(([a], [b]) => a - b)
+      .map(([, value]) => value)
+      .join('');
+  }
+
+  protected chunkValue(
+    value: string,
+    existingCookies: Record<string, string> = {},
+    options: CookieOptions = {},
+  ): Array<Cookie> {
+    const cookies: Array<Cookie> = [];
+    const finalOptions = { ...this.cookieOptions, ...options };
+
+    const existingChunks = Object.keys(existingCookies).filter(
+      name =>
+        name.startsWith(`${this.cookieName}.`) && name.match(CHUNK_PATTERN),
+    );
+
+    if (value.length <= CHUNK_SIZE) {
+      cookies.push({ name: this.cookieName, value, options: finalOptions });
+      existingChunks.forEach(name => {
+        cookies.push(this.createExpiredCokie(name, finalOptions));
+      });
+
+      return cookies;
+    }
+
+    const chunkCount = Math.ceil(value.length / CHUNK_SIZE);
+
+    for (let i = 0; i < chunkCount; ++i) {
+      const start = i * CHUNK_SIZE;
+      const end = start + CHUNK_SIZE;
+      cookies.push({
+        name: `${this.cookieName}.${i}`,
+        value: value.slice(start, end),
+        options: finalOptions,
+      });
+    }
+
+    existingChunks.forEach(name => {
+      const [, match] = name.match(CHUNK_PATTERN) || [];
+      if (match && parseInt(match, 10) >= chunkCount) {
+        cookies.push(this.createExpiredCokie(name, finalOptions));
+      }
+    });
+
+    return cookies;
+  }
+
+  private createExpiredCokie(
+    name: string,
+    options: CookieOptions = {},
+  ): Cookie {
+    return {
+      name,
+      value: '',
+      options: {
+        ...options,
+        ...this.cookieOptions,
+        maxAge: 0,
+        expires: new Date(0),
+      },
+    };
+  }
 }
