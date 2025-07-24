@@ -1,5 +1,3 @@
-// import { sealData, unsealData } from 'iron-session';
-import * as Iron from 'iron-webcrypto';
 import type { ConfigurationProvider } from '../config/ConfigurationProvider';
 import {
   AuthKitError,
@@ -63,6 +61,14 @@ export class SessionManager<TRequest, TResponse> {
       console.error('Detailed error:', error);
       throw new SessionEcnryptionError('Failed to decrypt session', error);
     }
+  }
+
+  private async getSession(request: TRequest): Promise<Session | null> {
+    const encryptedSession = await this.storage.getSession(request);
+    if (!encryptedSession) {
+      return null;
+    }
+    return this.decryptSession(encryptedSession);
   }
 
   private async validateSession<TCustomClaims = CustomClaims>(
@@ -149,7 +155,10 @@ export class SessionManager<TRequest, TResponse> {
     };
   }
 
-  async refreshSession<TCustomClaims = CustomClaims>(session: Session) {
+  async refreshSession<TCustomClaims = CustomClaims>(
+    session: Session,
+    organizationId?: string,
+  ) {
     try {
       const currentClaims = this.tokenManager.parseTokenClaims(
         session.accessToken,
@@ -158,7 +167,7 @@ export class SessionManager<TRequest, TResponse> {
         await this.client.userManagement.authenticateWithRefreshToken({
           refreshToken: session.refreshToken,
           clientId: this.config.getValue('clientId'),
-          organizationId: currentClaims.org_id,
+          organizationId: organizationId ?? currentClaims.org_id,
         });
 
       const newSession: Session = {
@@ -181,7 +190,7 @@ export class SessionManager<TRequest, TResponse> {
         role: claims.role,
         permissions: claims.permissions,
         entitlements: claims.entitlements,
-        imposionator: newSession.impersonator,
+        impersonator: newSession.impersonator,
         accessToken: newSession.accessToken,
         claims,
         sessionData,
@@ -232,6 +241,86 @@ export class SessionManager<TRequest, TResponse> {
 
     // Save to response
     return this.storage.saveSession(response, encryptedSession);
+  }
+
+  async switchToOrganization<TCustomClaims = CustomClaims>(
+    request: TRequest,
+    response: TResponse,
+    organizationId: string,
+  ): Promise<{
+    response: TResponse;
+    authResult: AuthResult<TCustomClaims>;
+  }> {
+    const session = await this.getSession(request);
+
+    if (!session) {
+      throw new AuthKitError('No active session to switch organization');
+    }
+
+    try {
+      const refreshResult = await this.refreshSession<TCustomClaims>(
+        session,
+        organizationId,
+      );
+
+      // Save the new session
+      const updatedResponse = await this.storage.saveSession(
+        response,
+        refreshResult.sessionData,
+      );
+
+      return {
+        response: updatedResponse,
+        authResult: {
+          user: refreshResult.user,
+          sessionId: refreshResult.sessionId,
+          impersonator: refreshResult.impersonator,
+          accessToken: refreshResult.accessToken,
+          refreshToken: refreshResult.session.refreshToken,
+          claims: refreshResult.claims,
+        },
+      };
+    } catch (error: any) {
+      // Handle specific WorkOS error codes
+      if (error?.code === 'sso_required') {
+        // For SSO required, we need to redirect to the authorization URL
+        const authUrl = await this.getAuthorizationUrl({
+          redirectUri: this.config.getValue('redirectUri'),
+        });
+        throw new AuthKitError(
+          `SSO required for organization ${organizationId}`,
+          error,
+          { authUrl },
+        );
+      }
+
+      if (error?.code === 'mfa_enrollment') {
+        // For MFA enrollment, also redirect to authorization URL
+        const authUrl = await this.getAuthorizationUrl({
+          redirectUri: this.config.getValue('redirectUri'),
+        });
+        throw new AuthKitError(
+          `MFA enrollment required for organization ${organizationId}`,
+          error,
+          { authUrl },
+        );
+      }
+
+      if (error?.authkit_redirect_url) {
+        // Custom redirect URL from WorkOS
+        throw new AuthKitError(
+          'Organization switch requires authentication',
+          error,
+          { authUrl: error.authkit_redirect_url },
+        );
+      }
+
+      // Re-throw other errors
+      throw new AuthKitError(
+        `Failed to switch to organization ${organizationId}`,
+        error,
+      );
+    }
   }
 
   async terminateSession(

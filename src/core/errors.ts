@@ -1,8 +1,11 @@
 export class AuthKitError extends Error {
-  constructor(message: string, cause?: unknown) {
+  data?: Record<string, any>;
+
+  constructor(message: string, cause?: unknown, data?: Record<string, any>) {
     super(message);
     this.name = 'AuthKitError';
     this.cause = cause;
+    this.data = data;
   }
 }
 

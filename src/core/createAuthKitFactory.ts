@@ -82,5 +82,11 @@ export const createAuthKitFactory = once(function createAuthKit<
     getLogoutUrl: (
       ...args: Parameters<(typeof SessionManager.prototype)['terminateSession']>
     ) => getSessionManager().terminateSession(...args),
+
+    switchToOrganization: (
+      ...args: Parameters<
+        (typeof SessionManager.prototype)['switchToOrganization']
+      >
+    ) => getSessionManager().switchToOrganization(...args),
   };
 });
