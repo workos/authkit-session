@@ -20,15 +20,15 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "22.14.1",
-    "prettier": "^3.5.3",
+    "prettier": "^3.6.2",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@workos-inc/node": "^7.46.0",
+    "@workos-inc/node": "^7.62.0",
     "iron-session": "^8.0.4",
     "iron-webcrypto": "^1.2.1",
-    "jose": "^6.0.10"
+    "jose": "^6.0.12"
   },
   "engines": {
     "node": ">=22.0.0"
