@@ -7,6 +7,7 @@ export interface BaseTokenClaims extends JWTPayload {
   role?: string;
   permissions?: string[];
   entitlements?: string[];
+  feature_flags?: string[];
 }
 
 export type CustomClaims = Record<string, unknown>;
