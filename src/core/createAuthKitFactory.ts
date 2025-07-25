@@ -1,12 +1,17 @@
 import { once } from '../utils';
-import { getWorkOS } from './client/workosLite';
+import { getWorkOS } from './client/WorkOSLite';
 import type { WorkOSClient } from './client/types';
 import { getConfig, getConfigurationProvider, getFullConfig } from './config';
 import type { AuthKitConfig } from './config/types';
 import sessionEncryption from './encryption/ironWebcryptoEncryption';
 import { SessionManager } from './session/SessionManager';
 import TokenManager from './session/TokenManager';
-import type { SessionEncryption, SessionStorage } from './session/types';
+import type {
+  BaseTokenClaims,
+  CustomClaims,
+  SessionEncryption,
+  SessionStorage,
+} from './session/types';
 
 export const createAuthKitFactory = once(function createAuthKit<
   TRequest,
@@ -88,5 +93,32 @@ export const createAuthKitFactory = once(function createAuthKit<
         (typeof SessionManager.prototype)['switchToOrganization']
       >
     ) => getSessionManager().switchToOrganization(...args),
+
+    getTokenClaims: async <TCustomClaims = CustomClaims>(
+      request: TRequest,
+      accessToken?: string,
+    ): Promise<Partial<BaseTokenClaims & TCustomClaims>> => {
+      if (accessToken) {
+        try {
+          return getTokenManager().parseTokenClaims<TCustomClaims>(accessToken);
+        } catch {
+          return {};
+        }
+      }
+
+      const authResult =
+        await getSessionManager().withAuth<TCustomClaims>(request);
+      if (!authResult.accessToken) {
+        return {};
+      }
+
+      try {
+        return getTokenManager().parseTokenClaims<TCustomClaims>(
+          authResult.accessToken,
+        );
+      } catch {
+        return {};
+      }
+    },
   };
 });
