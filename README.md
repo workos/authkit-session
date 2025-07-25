@@ -9,9 +9,11 @@ A framework-agnostic authentication library for WorkOS with a modular adapter sy
 
 - **Framework-agnostic core**: Common authentication logic that works across platforms
 - **Adapter pattern**: Simple interface for framework-specific implementations
-- **Session management**: Secure cookie-based authentication
+- **Session management**: Secure encrypted cookie-based authentication
 - **JWT handling**: Token validation, parsing, and refresh
-- **Type-safe API**: Full TypeScript support
+- **Organization switching**: Switch user context between organizations
+- **Type-safe API**: Full TypeScript support with custom claims
+- **Token claims parsing**: Extract and validate JWT claims
 
 ## Installation
 
@@ -44,36 +46,69 @@ configure({
 2. Create a storage adapter for your framework:
 
 ```typescript
-import { createAuthKitFactory } from '@workos/authkit-session';
-import type { SessionStorage } from '@workos/authkit-session';
+import { createAuthKitFactory, CookieSessionStorage } from '@workos/authkit-session';
+import type { SessionStorage, ConfigurationProvider } from '@workos/authkit-session';
 
-// Create your framework-specific storage adapter
-class MyFrameworkStorage implements SessionStorage<MyRequest, MyResponse> {
-  cookieName: string;
-  
-  constructor(cookieName = 'wos-session') {
-    this.cookieName = cookieName;
+// Option 1: Extend CookieSessionStorage (recommended)
+class MyFrameworkStorage extends CookieSessionStorage<MyRequest, MyResponse> {
+  constructor(config: ConfigurationProvider) {
+    super(config);
   }
 
   async getSession(request: MyRequest): Promise<string | null> {
-    // Framework-specific implementation to get cookie
-    return getCookieFromRequest(request, this.cookieName);
+    // Extract cookie from your framework's request object
+    const cookies = request.headers.cookie || '';
+    const match = cookies.match(new RegExp(`${this.cookieName}=([^;]+)`));
+    return match ? decodeURIComponent(match[1]) : null;
   }
 
   async saveSession(response: MyResponse, sessionData: string): Promise<MyResponse> {
-    // Framework-specific implementation to set cookie
-    return setCookieOnResponse(response, this.cookieName, sessionData);
+    // Set cookie on your framework's response object
+    const cookieValue = `${this.cookieName}=${encodeURIComponent(sessionData)}; ${this.getCookieAttributes()}`;
+    response.headers['Set-Cookie'] = cookieValue;
+    return response;
   }
 
   async clearSession(response: MyResponse): Promise<MyResponse> {
-    // Framework-specific implementation to clear cookie
-    return clearCookieOnResponse(response, this.cookieName);
+    // Clear cookie by setting expired date
+    const expiredCookie = `${this.cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    response.headers['Set-Cookie'] = expiredCookie;
+    return response;
+  }
+
+  private getCookieAttributes(): string {
+    const attrs = [];
+    if (this.cookieOptions.path) attrs.push(`path=${this.cookieOptions.path}`);
+    if (this.cookieOptions.domain) attrs.push(`domain=${this.cookieOptions.domain}`);
+    if (this.cookieOptions.maxAge) attrs.push(`max-age=${this.cookieOptions.maxAge}`);
+    if (this.cookieOptions.httpOnly) attrs.push('httponly');
+    if (this.cookieOptions.secure) attrs.push('secure');
+    if (this.cookieOptions.sameSite) attrs.push(`samesite=${this.cookieOptions.sameSite}`);
+    return attrs.join('; ');
+  }
+}
+
+// Option 2: Implement SessionStorage interface directly
+class CustomStorage implements SessionStorage<MyRequest, MyResponse> {
+  async getSession(request: MyRequest): Promise<string | null> {
+    // Your custom session retrieval logic
+    return getSessionFromRequest(request);
+  }
+
+  async saveSession(response: MyResponse, sessionData: string): Promise<MyResponse> {
+    // Your custom session storage logic
+    return saveSessionToResponse(response, sessionData);
+  }
+
+  async clearSession(response: MyResponse): Promise<MyResponse> {
+    // Your custom session clearing logic
+    return clearSessionFromResponse(response);
   }
 }
 
 // Create your AuthKit instance
 const authKit = createAuthKitFactory<MyRequest, MyResponse>({
-  sessionStorageFactory: (config) => new MyFrameworkStorage(),
+  sessionStorageFactory: (config) => new MyFrameworkStorage(config),
 });
 ```
 
@@ -81,8 +116,7 @@ const authKit = createAuthKitFactory<MyRequest, MyResponse>({
 
 ```typescript
 // Validate a session
-const authResult = await authKit.withAuth(request);
-const { user, claims, accessToken, refreshToken, sessionId, impersonator } = authResult;
+const { user, claims, sessionId, impersonator, accessToken, refreshToken } = await authKit.withAuth(request);
 
 // Generate an authorization URL
 const authUrl = await authKit.getAuthorizationUrl({
@@ -91,9 +125,28 @@ const authUrl = await authKit.getAuthorizationUrl({
   screenHint: 'sign-in', // or 'sign-up'
 });
 
-// Refresh a session
-const refreshResult = await authKit.refreshSession(session);
-const { user, sessionId, organizationId, role, permissions, entitlements, impersonator, accessToken, claims, sessionData, session: newSession } = refreshResult;
+// Generate sign-in/sign-up URLs
+const signInUrl = await authKit.getSignInUrl({ redirectUri: 'https://yourdomain.com/auth/callback' });
+const signUpUrl = await authKit.getSignUpUrl({ redirectUri: 'https://yourdomain.com/auth/callback' });
+
+// Get token claims
+const claims = await authKit.getTokenClaims(request);
+// Or parse specific access token
+const specificClaims = await authKit.getTokenClaims(request, accessToken);
+
+// Switch to different organization
+const { response: updatedResponse, authResult: newAuth } = await authKit.switchToOrganization(
+  request,
+  response, 
+  'org_123'
+);
+
+// Terminate session and get logout URL
+const { response: clearedResponse, logoutUrl } = await authKit.getLogoutUrl(
+  session,
+  response,
+  { returnTo: 'https://yourdomain.com' }
+);
 ```
 
 ## Core Concepts
@@ -109,7 +162,9 @@ AuthKit SSR uses encrypted cookies to store session information. It handles:
 
 ### Adapter System
 
-The adapter pattern uses a storage interface to abstract framework-specific concepts:
+AuthKit uses an adapter pattern to abstract framework-specific request/response handling. This allows the core authentication logic to remain framework-agnostic while enabling support for any server-side framework.
+
+#### SessionStorage Interface
 
 ```typescript
 interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
@@ -119,7 +174,95 @@ interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
 }
 ```
 
-Each framework adapter implements this interface to handle its specific request/response objects.
+#### CookieSessionStorage Base Class
+
+For cookie-based session storage, extend the provided `CookieSessionStorage` class:
+
+```typescript
+import { CookieSessionStorage } from '@workos/authkit-session';
+
+abstract class CookieSessionStorage<TRequest, TResponse> {
+  protected cookieName: string;           // From config: cookieName
+  protected cookieOptions: CookieOptions; // Derived from config
+  
+  // Implement these methods for your framework
+  abstract getSession(request: TRequest): Promise<string | null>;
+  abstract saveSession(response: TResponse, sessionData: string): Promise<TResponse>;
+  abstract clearSession(response: TResponse): Promise<TResponse>;
+}
+
+interface CookieOptions {
+  path?: string;           // Default: '/'
+  domain?: string;         // From config: cookieDomain
+  maxAge?: number;         // From config: cookieMaxAge (400 days)
+  httpOnly?: boolean;      // Default: true
+  secure?: boolean;        // From config: apiHttps
+  sameSite?: 'lax' | 'strict' | 'none';  // From config: cookieSameSite
+}
+```
+
+#### Framework-Specific Examples
+
+**Express/Node.js:**
+```typescript
+class ExpressStorage extends CookieSessionStorage<Request, Response> {
+  async getSession(request: Request): Promise<string | null> {
+    return request.cookies[this.cookieName] || null;
+  }
+
+  async saveSession(response: Response, sessionData: string): Promise<Response> {
+    response.cookie(this.cookieName, sessionData, this.cookieOptions);
+    return response;
+  }
+
+  async clearSession(response: Response): Promise<Response> {
+    response.clearCookie(this.cookieName, { path: this.cookieOptions.path });
+    return response;
+  }
+}
+```
+
+**Hono:**
+```typescript
+class HonoStorage extends CookieSessionStorage<HonoRequest, HonoResponse> {
+  async getSession(request: HonoRequest): Promise<string | null> {
+    return getCookie(request, this.cookieName) || null;
+  }
+
+  async saveSession(response: HonoResponse, sessionData: string): Promise<HonoResponse> {
+    setCookie(response, this.cookieName, sessionData, this.cookieOptions);
+    return response;
+  }
+
+  async clearSession(response: HonoResponse): Promise<HonoResponse> {
+    deleteCookie(response, this.cookieName);
+    return response;
+  }
+}
+```
+
+#### Creating Framework Adapters
+
+When creating an adapter for a new framework:
+
+1. **Choose your approach**: Extend `CookieSessionStorage` for cookie-based storage, or implement `SessionStorage` directly for custom storage
+2. **Handle framework request/response objects**: Extract cookies from requests and set cookies on responses
+3. **Respect configuration**: Use `this.cookieName` and `this.cookieOptions` from the base class
+4. **Test thoroughly**: Ensure session persistence works across requests
+
+#### Factory Configuration
+
+```typescript
+const authKit = createAuthKitFactory<MyRequest, MyResponse>({
+  sessionStorageFactory: (config) => new MyFrameworkStorage(config),
+  
+  // Optional: Custom session encryption
+  sessionEncryptionFactory: (config) => myCustomEncryption,
+  
+  // Optional: Custom WorkOS client
+  clientFactory: (config) => myCustomWorkOSClient,
+});
+```
 
 ## Configuration
 
@@ -132,6 +275,11 @@ WORKOS_CLIENT_ID=your-client-id
 WORKOS_API_KEY=your-api-key
 WORKOS_REDIRECT_URI=https://yourdomain.com/auth/callback
 WORKOS_COOKIE_PASSWORD=must-be-at-least-32-characters-long
+WORKOS_COOKIE_NAME=wos-session
+WORKOS_COOKIE_MAX_AGE=34560000
+WORKOS_API_HOSTNAME=api.workos.com
+WORKOS_API_HTTPS=true
+WORKOS_API_PORT=443
 ```
 
 ### Programmatic Configuration
@@ -144,9 +292,13 @@ configure({
   apiKey: 'your-api-key',
   redirectUri: 'https://yourdomain.com/auth/callback',
   cookiePassword: 'must-be-at-least-32-characters-long',
-  cookieName: 'your-custom-cookie-name', // Default: 'wos-session'
-  cookieMaxAge: 60 * 60 * 24 * 30, // 30 days in seconds
+  cookieName: 'wos-session', // Default: 'wos-session'
+  cookieMaxAge: 60 * 60 * 24 * 400, // 400 days in seconds
   cookieSameSite: 'lax', // 'strict', 'lax', or 'none'
+  cookieDomain: '.yourdomain.com', // Optional: cookie domain
+  apiHostname: 'api.workos.com', // Optional: API hostname
+  apiHttps: true, // Default: true
+  apiPort: 443, // Optional: API port
 });
 ```
 
@@ -160,13 +312,106 @@ configure({
 
 ### AuthKit Instance API
 
-- `withAuth(request)`: Validate the current session and return `AuthResult` with user, claims, tokens, and session info
+- `withAuth<TCustomClaims>(request)`: Validate the current session and return `AuthResult<TCustomClaims>`
 - `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL with `returnPathname`, `redirectUri`, and `screenHint`
-- `getSignInUrl(options)`: Generate a sign-in URL (calls `getAuthorizationUrl` with `screenHint: 'sign-in'`)
-- `getSignUpUrl(options)`: Generate a sign-up URL (calls `getAuthorizationUrl` with `screenHint: 'sign-up'`)
-- `refreshSession(session)`: Refresh an existing session and return updated session data
-- `saveSession(response, sessionData)`: Save session data to a response
-- `getLogoutUrl(session, response, options)`: End a user session and return logout URL with updated response
+- `getSignInUrl(options)`: Generate a sign-in URL with `organizationId`, `loginHint`, and `redirectUri`
+- `getSignUpUrl(options)`: Generate a sign-up URL with `organizationId`, `loginHint`, and `redirectUri`
+- `getTokenClaims<TCustomClaims>(request, accessToken?)`: Parse JWT token claims from session or specific token
+- `switchToOrganization(request, response, organizationId)`: Switch user to different organization context
+- `saveSession(response, sessionData)`: Save encrypted session data to response
+- `getLogoutUrl(session, response, options?)`: Terminate session and return logout URL with cleared response
+
+## Advanced Features
+
+### Organization Switching
+
+Switch users between organizations without requiring re-authentication:
+
+```typescript
+try {
+  const { response: updatedResponse, authResult } = await authKit.switchToOrganization(
+    request,
+    response,
+    'org_new_organization_id'
+  );
+  
+  // Use the updated response and new auth context
+  const { user, sessionId, claims } = authResult;
+} catch (error) {
+  if (error.authUrl) {
+    // Handle cases requiring re-authentication (SSO, MFA)
+    redirect(error.authUrl);
+  }
+}
+```
+
+### Token Claims Parsing
+
+Extract and validate JWT claims from access tokens:
+
+```typescript
+// Parse claims from current session
+const claims = await authKit.getTokenClaims<MyCustomClaims>(request);
+
+// Parse claims from specific token
+const specificClaims = await authKit.getTokenClaims<MyCustomClaims>(request, accessToken);
+
+// Custom claims interface
+interface MyCustomClaims {
+  custom_field: string;
+  user_metadata: Record<string, unknown>;
+}
+```
+
+### TypeScript Support
+
+AuthKit provides full TypeScript support with generic type parameters:
+
+```typescript
+interface CustomClaims {
+  department: string;
+  permissions: string[];
+}
+
+const { user, claims } = await authKit.withAuth<CustomClaims>(request);
+// claims is typed as BaseTokenClaims & CustomClaims
+```
+
+### AuthResult Interface
+
+The `withAuth` method returns an `AuthResult` object with the following structure:
+
+```typescript
+interface AuthResult<TCustomClaims = Record<string, unknown>> {
+  user?: User | null;                    // WorkOS user object
+  claims?: BaseTokenClaims & TCustomClaims; // JWT token claims
+  impersonator?: Impersonator;           // Impersonation context if any
+  accessToken?: string;                  // JWT access token
+  refreshToken?: string;                 // Refresh token
+  sessionId?: string;                    // Session identifier from claims
+}
+
+interface BaseTokenClaims {
+  sid: string;                           // Session ID
+  org_id?: string;                       // Organization ID
+  role?: string;                         // User role
+  permissions?: string[];                // User permissions
+  entitlements?: string[];               // User entitlements
+  feature_flags?: string[];              // Feature flags
+}
+```
+
+### Additional Exports
+
+The library also exports these components for advanced use cases:
+
+```typescript
+import { 
+  SessionManager,           // Core session management class
+  CookieSessionStorage,     // Abstract cookie storage base class
+  getWorkOS                 // WorkOS client factory
+} from '@workos/authkit-session';
+```
 
 ## Security
 
