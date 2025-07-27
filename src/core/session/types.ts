@@ -1,4 +1,4 @@
-import type { Impersonator, User } from '../client/types';
+import type { Impersonator, User } from '@workos-inc/node';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {

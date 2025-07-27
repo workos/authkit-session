@@ -1,3 +1,4 @@
+import type { User, Impersonator, Organization } from '@workos-inc/node';
 export interface UserManagementInterface {
   getAuthorizationUrl: (options: AuthorizationURLOptions) => string;
   authenticateWithCode: (
@@ -6,7 +7,8 @@ export interface UserManagementInterface {
   authenticateWithRefreshToken: (
     options: AuthenticateWithRefreshTokenOptions,
   ) => Promise<AuthenticationResponse>;
-  getLogoutUrl: (optoions: { sessionId: string; returnTo?: string }) => string;
+  getLogoutUrl: (options: { sessionId: string; returnTo?: string }) => string;
+  revokeSession: (options: { sessionId: string }) => Promise<void>;
 }
 
 export interface WorkOSClientConstructor {
@@ -31,26 +33,6 @@ export interface WorkOSOptions {
   appInfo?: AppInfo;
   fetchFn?: typeof fetch;
   clientId?: string;
-}
-
-export interface User {
-  object: string;
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  profilePictureUrl: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  lastSignInAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  externalId: string | null;
-  metadata: Record<string, string>;
-}
-
-export interface Impersonator {
-  email: string;
-  reason: string | null;
 }
 
 export interface AuthenticationResponse {
