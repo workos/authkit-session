@@ -83,6 +83,16 @@ export class UserManagement implements UserManagementInterface {
     return url.toString();
   }
 
+  async revokeSession({ sessionId }: { sessionId: string }): Promise<void> {
+    if (!sessionId) {
+      throw new TypeError('sessionId is required');
+    }
+
+    await this.client.post('/user_management/sessions/revoke', {
+      session_id: sessionId,
+    });
+  }
+
   getAuthorizationUrl({
     connectionId,
     codeChallenge,

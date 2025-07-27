@@ -84,15 +84,88 @@ export const createAuthKitFactory = once(function createAuthKit<
         screenHint: 'sign-up',
       }),
 
-    getLogoutUrl: (
+    terminateSession: (
       ...args: Parameters<(typeof SessionManager.prototype)['terminateSession']>
     ) => getSessionManager().terminateSession(...args),
+
+    signOut: async (
+      request: TRequest,
+      response: TResponse,
+      options?: { returnTo?: string },
+    ) => {
+      // Get the current session
+      const authResult = await getSessionManager().withAuth(request);
+
+      if (
+        !authResult.user ||
+        !authResult.accessToken ||
+        !authResult.refreshToken
+      ) {
+        // No session to terminate, just clear cookies
+        return sessionStorageFactory(getFullConfig()).clearSession(response);
+      }
+
+      // Create session object for termination
+      const session = {
+        accessToken: authResult.accessToken,
+        refreshToken: authResult.refreshToken,
+        user: authResult.user,
+        impersonator: authResult.impersonator,
+      };
+
+      // Terminate the session (this clears cookies and returns logout URL)
+      const result = await getSessionManager().terminateSession(
+        session,
+        response,
+        options,
+      );
+
+      return result.response;
+    },
 
     switchToOrganization: (
       ...args: Parameters<
         (typeof SessionManager.prototype)['switchToOrganization']
       >
     ) => getSessionManager().switchToOrganization(...args),
+
+    handleCallback: async (
+      request: TRequest,
+      response: TResponse,
+      options: { code: string; state?: string },
+    ) => {
+      const client = clientFactory(getFullConfig());
+      const config = getFullConfig();
+
+      // Authenticate with the OAuth code
+      const authResponse = await client.userManagement.authenticateWithCode({
+        code: options.code,
+        clientId: config.clientId,
+      });
+
+      // Create session using SessionManager
+      const updatedResponse = await getSessionManager().createSession(
+        authResponse,
+        response,
+      );
+
+      // Decode state if provided
+      let returnPathname = '/';
+      if (options.state) {
+        try {
+          const decoded = JSON.parse(atob(options.state));
+          returnPathname = decoded.returnPathname || '/';
+        } catch {
+          // Invalid state, use default
+        }
+      }
+
+      return {
+        response: updatedResponse,
+        returnPathname,
+        authResponse,
+      };
+    },
 
     getTokenClaims: async <TCustomClaims = CustomClaims>(
       request: TRequest,

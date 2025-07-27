@@ -331,10 +331,22 @@ export class SessionManager<TRequest, TResponse> {
     response: TResponse;
     logoutUrl: string;
   }> {
-    const clearedResponse = await this.storage.clearSession(response);
-
     const claims = this.tokenManager.parseTokenClaims(session.accessToken);
 
+    // Revoke the session on WorkOS side
+    try {
+      await this.client.userManagement.revokeSession({
+        sessionId: claims.sid,
+      });
+    } catch (error) {
+      console.error('Failed to revoke session on WorkOS:', error);
+      // Continue with local logout even if remote revocation fails
+    }
+
+    // Clear the session cookie locally
+    const clearedResponse = await this.storage.clearSession(response);
+
+    // Generate logout URL (for completeness, though session is already revoked)
     const logoutUrl = this.client.userManagement.getLogoutUrl({
       sessionId: claims.sid,
       returnTo: options?.returnTo,
