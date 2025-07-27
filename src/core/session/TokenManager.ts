@@ -48,7 +48,7 @@ export class TokenManager {
 
   getTokenExpiryTime(token: string): number | null {
     const claims = this.parseTokenClaims(token);
-    return claims.exp ? claims.exp : null;
+    return claims.exp ?? null;
   }
 }
 

@@ -1,7 +1,7 @@
 import type { ConfigurationProvider } from '../config/ConfigurationProvider';
 import {
   AuthKitError,
-  SessionEcnryptionError,
+  SessionEncryptionError,
   TokenRefreshError,
 } from '../errors';
 import type { AuthenticationResponse, WorkOSClient } from '../client/types';
@@ -45,7 +45,7 @@ export class SessionManager<TRequest, TResponse> {
       });
       return encryptedSession;
     } catch (error) {
-      throw new SessionEcnryptionError('Failed to encrypt session', error);
+      throw new SessionEncryptionError('Failed to encrypt session', error);
     }
   }
 
@@ -59,7 +59,7 @@ export class SessionManager<TRequest, TResponse> {
       return session;
     } catch (error) {
       console.error('Detailed error:', error);
-      throw new SessionEcnryptionError('Failed to decrypt session', error);
+      throw new SessionEncryptionError('Failed to decrypt session', error);
     }
   }
 
@@ -76,48 +76,7 @@ export class SessionManager<TRequest, TResponse> {
   ) {
     try {
       const session = await this.decryptSession(encryptedSession);
-
-      const isValid = await this.tokenManager.verifyToken(session.accessToken);
-
-      if (isValid) {
-        if (this.tokenManager.isTokenExpiring(session.accessToken)) {
-          const refreshResult =
-            await this.refreshSession<TCustomClaims>(session);
-          return {
-            valid: true,
-            session: refreshResult.session,
-            claims: refreshResult.claims,
-          };
-        }
-
-        const claims = this.tokenManager.parseTokenClaims<TCustomClaims>(
-          session.accessToken,
-        );
-
-        return {
-          valid: true,
-          session,
-          claims,
-        };
-      } else {
-        try {
-          const refreshResult =
-            await this.refreshSession<TCustomClaims>(session);
-          return {
-            valid: true,
-            session: refreshResult.session,
-            claims: refreshResult.claims,
-          };
-        } catch (error) {
-          return {
-            valid: false,
-            error:
-              error instanceof Error
-                ? error
-                : new TokenRefreshError('Failed to refresh session', error),
-          };
-        }
-      }
+      return await this.validateAndRefreshIfNeeded<TCustomClaims>(session);
     } catch (error) {
       return {
         valid: false,
@@ -125,6 +84,50 @@ export class SessionManager<TRequest, TResponse> {
           error instanceof Error
             ? error
             : new AuthKitError('Failed to decrypt session', error),
+      };
+    }
+  }
+
+  private async validateAndRefreshIfNeeded<TCustomClaims = CustomClaims>(
+    session: Session,
+  ) {
+    const isValid = await this.tokenManager.verifyToken(session.accessToken);
+    const isExpiring = this.tokenManager.isTokenExpiring(session.accessToken);
+
+    // Refresh if token is invalid or expiring
+    if (!isValid || isExpiring) {
+      return await this.attemptTokenRefresh<TCustomClaims>(session);
+    }
+
+    // Token is valid and not expiring, parse claims
+    const claims = this.tokenManager.parseTokenClaims<TCustomClaims>(
+      session.accessToken,
+    );
+
+    return {
+      valid: true,
+      session,
+      claims,
+    };
+  }
+
+  private async attemptTokenRefresh<TCustomClaims = CustomClaims>(
+    session: Session,
+  ) {
+    try {
+      const refreshResult = await this.refreshSession<TCustomClaims>(session);
+      return {
+        valid: true,
+        session: refreshResult.session,
+        claims: refreshResult.claims,
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error:
+          error instanceof Error
+            ? error
+            : new TokenRefreshError('Failed to refresh session', error),
       };
     }
   }
@@ -281,46 +284,37 @@ export class SessionManager<TRequest, TResponse> {
         },
       };
     } catch (error: any) {
-      // Handle specific WorkOS error codes
-      if (error?.code === 'sso_required') {
-        // For SSO required, we need to redirect to the authorization URL
-        const authUrl = await this.getAuthorizationUrl({
-          redirectUri: this.config.getValue('redirectUri'),
-        });
-        throw new AuthKitError(
-          `SSO required for organization ${organizationId}`,
-          error,
-          { authUrl },
-        );
-      }
+      throw await this.handleSwitchOrganizationError(error, organizationId);
+    }
+  }
 
-      if (error?.code === 'mfa_enrollment') {
-        // For MFA enrollment, also redirect to authorization URL
-        const authUrl = await this.getAuthorizationUrl({
-          redirectUri: this.config.getValue('redirectUri'),
-        });
-        throw new AuthKitError(
-          `MFA enrollment required for organization ${organizationId}`,
-          error,
-          { authUrl },
-        );
-      }
+  private async handleSwitchOrganizationError(error: any, organizationId: string): Promise<AuthKitError> {
+    const errorCodeToMessage = {
+      sso_required: `SSO required for organization ${organizationId}`,
+      mfa_enrollment: `MFA enrollment required for organization ${organizationId}`,
+    };
 
-      if (error?.authkit_redirect_url) {
-        // Custom redirect URL from WorkOS
-        throw new AuthKitError(
-          'Organization switch requires authentication',
-          error,
-          { authUrl: error.authkit_redirect_url },
-        );
-      }
+    const errorMessage = errorCodeToMessage[error?.code as keyof typeof errorCodeToMessage];
+    
+    if (errorMessage) {
+      const authUrl = await this.getAuthorizationUrl({
+        redirectUri: this.config.getValue('redirectUri'),
+      });
+      return new AuthKitError(errorMessage, error, { authUrl });
+    }
 
-      // Re-throw other errors
-      throw new AuthKitError(
-        `Failed to switch to organization ${organizationId}`,
+    if (error?.authkit_redirect_url) {
+      return new AuthKitError(
+        'Organization switch requires authentication',
         error,
+        { authUrl: error.authkit_redirect_url },
       );
     }
+
+    return new AuthKitError(
+      `Failed to switch to organization ${organizationId}`,
+      error,
+    );
   }
 
   async terminateSession(

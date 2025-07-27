@@ -43,8 +43,7 @@ export function configure(
   configOrSource: Partial<AuthKitConfig> | ValueSource,
   source?: ValueSource,
 ): void {
-  const config = getConfigurationInstance();
-  config.configure(configOrSource, source);
+  getConfigurationInstance().configure(configOrSource, source);
 }
 
 /**
@@ -58,8 +57,7 @@ export function configure(
 export function getConfig<K extends keyof AuthKitConfig>(
   key: K,
 ): AuthKitConfig[K] {
-  const config = getConfigurationInstance();
-  return config.getValue(key);
+  return getConfigurationInstance().getValue(key);
 }
 
 export function getConfigurationProvider(): ConfigurationProvider {
@@ -67,6 +65,5 @@ export function getConfigurationProvider(): ConfigurationProvider {
 }
 
 export function getFullConfig(): AuthKitConfig {
-  const config = getConfigurationInstance();
-  return config.getConfig();
+  return getConfigurationInstance().getConfig();
 }

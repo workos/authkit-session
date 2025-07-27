@@ -171,24 +171,14 @@ export const createAuthKitFactory = once(function createAuthKit<
       request: TRequest,
       accessToken?: string,
     ): Promise<Partial<BaseTokenClaims & TCustomClaims>> => {
-      if (accessToken) {
-        try {
-          return getTokenManager().parseTokenClaims<TCustomClaims>(accessToken);
-        } catch {
-          return {};
-        }
-      }
-
-      const authResult =
-        await getSessionManager().withAuth<TCustomClaims>(request);
-      if (!authResult.accessToken) {
+      const tokenToUse = accessToken || (await getSessionManager().withAuth<TCustomClaims>(request)).accessToken;
+      
+      if (!tokenToUse) {
         return {};
       }
 
       try {
-        return getTokenManager().parseTokenClaims<TCustomClaims>(
-          authResult.accessToken,
-        );
+        return getTokenManager().parseTokenClaims<TCustomClaims>(tokenToUse);
       } catch {
         return {};
       }

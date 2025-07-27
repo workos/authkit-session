@@ -9,7 +9,7 @@ export class AuthKitError extends Error {
   }
 }
 
-export class SessionEcnryptionError extends AuthKitError {
+export class SessionEncryptionError extends AuthKitError {
   constructor(message: string, cause?: unknown) {
     super(message, cause);
     this.name = 'SessionEncryptionError';

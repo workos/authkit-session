@@ -78,38 +78,14 @@ export class ConfigurationProvider {
   }
 
   getValue<K extends keyof AuthKitConfig>(key: K): AuthKitConfig[K] {
-    // First check environment variables
     const envKey = this.getEnvironmentVariableName(key);
-    let envValue: AuthKitConfig[K] | undefined = undefined;
-
-    const { valueSource, config } = this;
-    if (typeof valueSource === 'function') {
-      envValue = valueSource(envKey);
-    } else if (valueSource && envKey in valueSource) {
-      envValue = valueSource[envKey];
-    }
-
-    // If environment variable exists, use it
-    if (envValue != null) {
-      // Convert string values to appropriate types
-      if (key === 'apiHttps' && typeof envValue === 'string') {
-        return (envValue === 'true') as AuthKitConfig[K];
-      }
-
-      if (
-        (key === 'apiPort' || key === 'cookieMaxAge') &&
-        typeof envValue === 'string'
-      ) {
-        const num = parseInt(envValue, 10);
-        return (isNaN(num) ? undefined : num) as AuthKitConfig[K];
-      }
-
-      return envValue as AuthKitConfig[K];
-    }
-
-    // Then check programmatically provided config
-    if (key in config && config[key] != undefined) {
-      return config[key] as AuthKitConfig[K];
+    const envValue = this.getEnvironmentValue(envKey);
+    
+    // Use environment value if available, otherwise fall back to config
+    const rawValue = envValue ?? this.config[key];
+    
+    if (rawValue != null) {
+      return this.convertValueType(key, rawValue) as AuthKitConfig[K];
     }
 
     if (this.requiredKeys.includes(key)) {
@@ -119,6 +95,42 @@ export class ConfigurationProvider {
     }
 
     return undefined as AuthKitConfig[K];
+  }
+
+  private getEnvironmentValue(envKey: string): string | undefined {
+    const { valueSource } = this;
+    
+    if (typeof valueSource === 'function') {
+      return valueSource(envKey);
+    }
+    
+    if (valueSource && envKey in valueSource) {
+      return valueSource[envKey];
+    }
+    
+    return undefined;
+  }
+
+  private convertValueType<K extends keyof AuthKitConfig>(
+    key: K,
+    value: unknown,
+  ): AuthKitConfig[K] | undefined {
+    if (typeof value !== 'string') {
+      return value as AuthKitConfig[K];
+    }
+
+    // Handle boolean conversion
+    if (key === 'apiHttps') {
+      return (value === 'true') as AuthKitConfig[K];
+    }
+
+    // Handle number conversion
+    if (key === 'apiPort' || key === 'cookieMaxAge') {
+      const num = parseInt(value, 10);
+      return (isNaN(num) ? undefined : num) as AuthKitConfig[K];
+    }
+
+    return value as AuthKitConfig[K];
   }
 
   getConfig(): AuthKitConfig {
