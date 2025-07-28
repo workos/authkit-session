@@ -288,14 +288,18 @@ export class SessionManager<TRequest, TResponse> {
     }
   }
 
-  private async handleSwitchOrganizationError(error: any, organizationId: string): Promise<AuthKitError> {
+  private async handleSwitchOrganizationError(
+    error: any,
+    organizationId: string,
+  ): Promise<AuthKitError> {
     const errorCodeToMessage = {
       sso_required: `SSO required for organization ${organizationId}`,
       mfa_enrollment: `MFA enrollment required for organization ${organizationId}`,
     };
 
-    const errorMessage = errorCodeToMessage[error?.code as keyof typeof errorCodeToMessage];
-    
+    const errorMessage =
+      errorCodeToMessage[error?.code as keyof typeof errorCodeToMessage];
+
     if (errorMessage) {
       const authUrl = await this.getAuthorizationUrl({
         redirectUri: this.config.getValue('redirectUri'),

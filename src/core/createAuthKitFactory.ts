@@ -171,8 +171,11 @@ export const createAuthKitFactory = once(function createAuthKit<
       request: TRequest,
       accessToken?: string,
     ): Promise<Partial<BaseTokenClaims & TCustomClaims>> => {
-      const tokenToUse = accessToken || (await getSessionManager().withAuth<TCustomClaims>(request)).accessToken;
-      
+      const tokenToUse =
+        accessToken ||
+        (await getSessionManager().withAuth<TCustomClaims>(request))
+          .accessToken;
+
       if (!tokenToUse) {
         return {};
       }

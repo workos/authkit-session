@@ -80,10 +80,10 @@ export class ConfigurationProvider {
   getValue<K extends keyof AuthKitConfig>(key: K): AuthKitConfig[K] {
     const envKey = this.getEnvironmentVariableName(key);
     const envValue = this.getEnvironmentValue(envKey);
-    
+
     // Use environment value if available, otherwise fall back to config
     const rawValue = envValue ?? this.config[key];
-    
+
     if (rawValue != null) {
       return this.convertValueType(key, rawValue) as AuthKitConfig[K];
     }
@@ -99,15 +99,15 @@ export class ConfigurationProvider {
 
   private getEnvironmentValue(envKey: string): string | undefined {
     const { valueSource } = this;
-    
+
     if (typeof valueSource === 'function') {
       return valueSource(envKey);
     }
-    
+
     if (valueSource && envKey in valueSource) {
       return valueSource[envKey];
     }
-    
+
     return undefined;
   }
 
