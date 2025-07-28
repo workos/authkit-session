@@ -5,6 +5,8 @@
 
 A framework-agnostic authentication library for WorkOS with a modular adapter system for server-side rendered applications.
 
+This library serves as the foundation for framework-specific WorkOS authentication packages like `@workos-inc/authkit-nextjs`, `@workos-inc/authkit-remix`, and `@workos-inc/authkit-sveltekit`. By implementing the `SessionStorage` interface for your framework, you can provide WorkOS authentication capabilities with minimal framework-specific code.
+
 ## Features
 
 - **Framework-agnostic core**: Common authentication logic that works across platforms
@@ -134,6 +136,9 @@ const authKit = createAuthKitFactory<MyRequest, MyResponse>({
 const { user, claims, sessionId, impersonator, accessToken, refreshToken } =
   await authKit.withAuth(request);
 
+// Note: ensureSignedIn option not yet implemented
+// Framework adapters should handle redirects when user is null
+
 // Generate an authorization URL
 const authUrl = await authKit.getAuthorizationUrl({
   returnPathname: '/dashboard',
@@ -149,7 +154,7 @@ const signUpUrl = await authKit.getSignUpUrl({
   redirectUri: 'https://yourdomain.com/auth/callback',
 });
 
-// Get token claims
+// Get token claims from current session
 const claims = await authKit.getTokenClaims(request);
 // Or parse specific access token
 const specificClaims = await authKit.getTokenClaims(request, accessToken);
@@ -158,13 +163,94 @@ const specificClaims = await authKit.getTokenClaims(request, accessToken);
 const { response: updatedResponse, authResult: newAuth } =
   await authKit.switchToOrganization(request, response, 'org_123');
 
-// Terminate session and get logout URL
-const { response: clearedResponse, logoutUrl } = await authKit.getLogoutUrl(
+// Handle OAuth callback
+const {
+  response: updatedResponse,
+  returnPathname,
+  authResponse,
+} = await authKit.handleCallback(request, response, {
+  code: 'oauth_code_from_query',
+  state: 'optional_state_from_query',
+});
+
+// Sign out (simple session termination)
+const clearedResponse = await authKit.signOut(request, response, {
+  returnTo: 'https://yourdomain.com',
+});
+
+// Terminate session and get logout URL (advanced)
+const { response: clearedResponse, logoutUrl } = await authKit.terminateSession(
   session,
   response,
   { returnTo: 'https://yourdomain.com' },
 );
+
+// Manually save a session (for custom auth flows)
+await authKit.saveSession(response, authResponse);
+
+// Manually refresh session
+const refreshedAuth = await authKit.refreshSession(session, organizationId);
 ```
+
+## For Framework Implementers
+
+If you're building a framework-specific package (like `@workos-inc/authkit-sveltekit`), this library provides everything needed for WorkOS authentication:
+
+### Implementation Steps
+
+1. **Install and configure** `@workos/authkit-session` as a dependency
+2. **Create a SessionStorage adapter** for your framework's request/response objects
+3. **Export framework-specific helpers** that wrap the core AuthKit functionality
+4. **Handle routing** for sign-in, callback, and sign-out endpoints
+
+### Example Framework Package Structure
+
+```typescript
+// src/storage.ts - Framework-specific storage adapter
+import { CookieSessionStorage } from '@workos/authkit-session';
+import type { ConfigurationProvider } from '@workos/authkit-session';
+
+export class SvelteKitStorage extends CookieSessionStorage<RequestEvent, void> {
+  // Implement framework-specific cookie handling
+}
+
+// src/index.ts - Main exports
+import { configure, createAuthKitFactory } from '@workos/authkit-session';
+import { SvelteKitStorage } from './storage';
+
+export { configure };
+
+export const authKit = createAuthKitFactory({
+  sessionStorageFactory: config => new SvelteKitStorage(config),
+});
+
+// Framework-specific helpers
+export async function withAuth(event: RequestEvent) {
+  return authKit.withAuth(event);
+}
+
+export async function handleCallback(event: RequestEvent) {
+  const url = new URL(event.request.url);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+
+  if (!code) throw new Error('Missing authorization code');
+
+  const result = await authKit.handleCallback(event, undefined, {
+    code,
+    state,
+  });
+  // Handle redirect to returnPathname
+}
+```
+
+### Key Considerations
+
+- **Request/Response Objects**: Adapt your framework's request/response objects to the `SessionStorage` interface
+- **Cookie Handling**: Implement secure cookie setting/getting for your framework
+- **Routing Integration**: Provide helpers for authentication routes (`/auth/signin`, `/auth/callback`, `/auth/signout`)
+- **TypeScript Support**: Export proper types for your framework's patterns
+- **Error Handling**: Wrap AuthKit errors in framework-appropriate error types
 
 ## Core Concepts
 
@@ -344,14 +430,26 @@ configure({
 
 ### AuthKit Instance API
 
-- `withAuth<TCustomClaims>(request)`: Validate the current session and return `AuthResult<TCustomClaims>`
+#### Authentication & Session Management
+
+- `withAuth<TCustomClaims>(request, options?)`: Validate the current session and return `AuthResult<TCustomClaims>`
+  - Note: `ensureSignedIn` option not yet implemented - framework adapters should handle redirects
+- `handleCallback(request, response, { code, state? })`: Process OAuth callback and create session
+- `signOut(request, response, options?)`: Simple session termination with cookie clearing
+- `terminateSession(session, response, options?)`: Advanced session termination with logout URL
+- `saveSession(response, authResponse)`: Manually save session from `AuthenticationResponse`
+- `refreshSession(session, organizationId?)`: Manually refresh session tokens
+
+#### URL Generation
+
 - `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL with `returnPathname`, `redirectUri`, and `screenHint`
 - `getSignInUrl(options)`: Generate a sign-in URL with `organizationId`, `loginHint`, and `redirectUri`
 - `getSignUpUrl(options)`: Generate a sign-up URL with `organizationId`, `loginHint`, and `redirectUri`
+
+#### Token & Organization Management
+
 - `getTokenClaims<TCustomClaims>(request, accessToken?)`: Parse JWT token claims from session or specific token
 - `switchToOrganization(request, response, organizationId)`: Switch user to different organization context
-- `saveSession(response, sessionData)`: Save encrypted session data to response
-- `getLogoutUrl(session, response, options?)`: Terminate session and return logout URL with cleared response
 
 ## Advanced Features
 
