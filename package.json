@@ -13,6 +13,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prettier": "prettier --check .",
     "format": "prettier --write .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
