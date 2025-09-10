@@ -1,4 +1,9 @@
-import type { User, Impersonator, Organization } from '@workos-inc/node';
+import type {
+  User,
+  Impersonator,
+  Organization,
+  WorkOS,
+} from '@workos-inc/node';
 export interface UserManagementInterface {
   getAuthorizationUrl: (options: AuthorizationURLOptions) => string;
   authenticateWithCode: (
@@ -12,12 +17,7 @@ export interface UserManagementInterface {
 }
 
 export interface WorkOSClientConstructor {
-  new (apiKey: string, options?: WorkOSOptions): WorkOSClient;
-}
-
-export interface WorkOSClient {
-  userManagement: UserManagementInterface;
-  getJwksUrl: (clientId: string) => string;
+  new (apiKey: string, options?: WorkOSOptions): WorkOS;
 }
 
 export interface AppInfo {

@@ -1,19 +1,21 @@
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../../utils';
-import type { WorkOSClient } from '../client/types';
 import type { BaseTokenClaims, CustomClaims } from './types';
+import type { WorkOS } from '@workos-inc/node';
 
 export class TokenManager {
   private clientId: string;
-  private client: WorkOSClient;
+  private client: WorkOS;
 
-  constructor(clientId: string, client: WorkOSClient) {
+  constructor(clientId: string, client: WorkOS) {
     this.clientId = clientId;
     this.client = client;
   }
 
   private readonly getPublicKey = once(() =>
-    createRemoteJWKSet(new URL(this.client.getJwksUrl(this.clientId))),
+    createRemoteJWKSet(
+      new URL(this.client.userManagement.getJwksUrl(this.clientId)),
+    ),
   );
 
   async verifyToken(token: string): Promise<boolean> {

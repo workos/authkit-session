@@ -1,6 +1,6 @@
+import type { WorkOS } from '@workos-inc/node';
 import { once } from '../utils';
-import { getWorkOS } from './client/WorkOSLite';
-import type { WorkOSClient } from './client/types';
+import { getWorkOS } from './client/workos';
 import { getConfig, getConfigurationProvider, getFullConfig } from './config';
 import type { AuthKitConfig } from './config/types';
 import sessionEncryption from './encryption/ironWebcryptoEncryption';
@@ -21,7 +21,7 @@ export const createAuthKitFactory = once(function createAuthKit<
     config: AuthKitConfig,
   ) => SessionStorage<TRequest, TResponse>;
   sessionEncryptionFactory?: (confg: AuthKitConfig) => SessionEncryption;
-  clientFactory?: (config: AuthKitConfig) => WorkOSClient;
+  clientFactory?: (config: AuthKitConfig) => WorkOS;
 }) {
   const {
     sessionStorageFactory,
@@ -130,7 +130,7 @@ export const createAuthKitFactory = once(function createAuthKit<
     ) => getSessionManager().switchToOrganization(...args),
 
     handleCallback: async (
-      request: TRequest,
+      _request: TRequest,
       response: TResponse,
       options: { code: string; state?: string },
     ) => {

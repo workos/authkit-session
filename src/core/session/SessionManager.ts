@@ -4,7 +4,7 @@ import {
   SessionEncryptionError,
   TokenRefreshError,
 } from '../errors';
-import type { AuthenticationResponse, WorkOSClient } from '../client/types';
+import type { AuthenticationResponse } from '../client/types';
 import type { TokenManager } from './TokenManager';
 import type {
   AuthResult,
@@ -13,19 +13,20 @@ import type {
   SessionStorage,
 } from './types';
 import type { SessionEncryption } from './types';
+import type { WorkOS } from '@workos-inc/node';
 
 export class SessionManager<TRequest, TResponse> {
   private readonly config: ConfigurationProvider;
   private readonly storage: SessionStorage<TRequest, TResponse>;
   private readonly tokenManager: TokenManager;
-  private readonly client: WorkOSClient;
+  private readonly client: WorkOS;
   private readonly encryption: SessionEncryption;
 
   constructor(
     config: ConfigurationProvider,
     storage: SessionStorage<TRequest, TResponse>,
     tokenManager: TokenManager,
-    client: WorkOSClient,
+    client: WorkOS,
     encryption: SessionEncryption,
   ) {
     this.config = config;
