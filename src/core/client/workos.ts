@@ -20,7 +20,7 @@ export function createWorkOSInstance() {
     https: apiHttps,
     port: apiPort,
     appInfo: {
-      name: 'authkit-react-router',
+      name: 'authkit-session',
       version,
     },
   };
