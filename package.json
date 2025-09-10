@@ -15,7 +15,7 @@
     "build": "tsup",
     "prettier": "prettier --check .",
     "format": "prettier --write .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest"
   },
   "keywords": [],
   "author": "WorkOS",
@@ -24,7 +24,8 @@
     "@types/node": "22.14.1",
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@workos-inc/node": "^7.62.0",
