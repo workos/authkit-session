@@ -355,4 +355,3 @@ describe('SessionManager', () => {
     });
   });
 });
-

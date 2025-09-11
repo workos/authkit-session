@@ -8,7 +8,6 @@ describe('ConfigurationProvider', () => {
     provider = new ConfigurationProvider();
   });
 
-
   describe('configure()', () => {
     it('updates config with object', () => {
       provider.configure({ clientId: 'test-client' });

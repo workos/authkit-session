@@ -128,4 +128,3 @@ describe('error inheritance', () => {
     });
   });
 });
-
