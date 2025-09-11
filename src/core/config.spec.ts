@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import {
   configure,
   getConfig,
@@ -10,7 +11,6 @@ describe('config', () => {
   let originalProvider: ConfigurationProvider;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     // Store reference to reset later
     originalProvider = getConfigurationProvider();
   });

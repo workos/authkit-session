@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { ConfigurationProvider } from './ConfigurationProvider.js';
 
 describe('ConfigurationProvider', () => {
@@ -7,9 +8,6 @@ describe('ConfigurationProvider', () => {
     provider = new ConfigurationProvider();
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
 
   describe('configure()', () => {
     it('updates config with object', () => {
