@@ -59,7 +59,6 @@ export class SessionManager<TRequest, TResponse> {
       );
       return session;
     } catch (error) {
-      console.error('Detailed error:', error);
       throw new SessionEncryptionError('Failed to decrypt session', error);
     }
   }
