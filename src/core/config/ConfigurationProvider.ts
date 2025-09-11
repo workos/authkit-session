@@ -1,5 +1,4 @@
 import type { AuthKitConfig, ValueSource } from './types.js';
-import { once } from '../../utils.js';
 
 /**
  * Default environment variable source that uses process.env
