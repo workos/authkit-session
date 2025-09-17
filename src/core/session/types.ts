@@ -5,6 +5,7 @@ export interface BaseTokenClaims extends JWTPayload {
   sid: string;
   org_id?: string;
   role?: string;
+  roles?: string[];
   permissions?: string[];
   entitlements?: string[];
   feature_flags?: string[];
