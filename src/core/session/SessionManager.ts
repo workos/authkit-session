@@ -191,6 +191,7 @@ export class SessionManager<TRequest, TResponse> {
         sessionId: claims.sid,
         organizationId: claims.org_id,
         role: claims.role,
+        roles: claims.roles,
         permissions: claims.permissions,
         entitlements: claims.entitlements,
         impersonator: newSession.impersonator,
