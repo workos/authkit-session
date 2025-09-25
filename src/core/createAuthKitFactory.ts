@@ -84,6 +84,13 @@ export const createAuthKitFactory = once(function createAuthKit<
         screenHint: 'sign-up',
       }),
 
+    // Expose getWorkOS for direct client access
+    getWorkOS: () => clientFactory(getFullConfig()),
+
+    // Expose SessionManager's getSession directly
+    getSession: (request: TRequest) => getSessionManager().getSession(request),
+
+    // terminateSession uses the standard SessionManager signature
     terminateSession: (
       ...args: Parameters<(typeof SessionManager.prototype)['terminateSession']>
     ) => getSessionManager().terminateSession(...args),

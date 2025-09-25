@@ -1,5 +1,5 @@
 import type { ConfigurationProvider } from '../config/ConfigurationProvider';
-import type { SessionStorage } from './types';
+import type { HeadersBag, SessionStorage } from './types';
 
 export interface CookieOptions {
   path?: string;
@@ -18,9 +18,11 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
 {
   protected cookieName: string;
   protected readonly cookieOptions: CookieOptions;
+  protected config: ConfigurationProvider;
 
   constructor(config: ConfigurationProvider) {
-    this.cookieName = config.getValue('cookieName') || 'workos_session';
+    this.config = config;
+    this.cookieName = config.getValue('cookieName') || 'wos_session';
     this.cookieOptions = {
       path: '/',
       httpOnly: true,
@@ -31,12 +33,43 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     };
   }
 
+  protected async applyHeaders(
+    _response: TResponse | undefined,
+    _headers: HeadersBag,
+  ): Promise<{ response: TResponse } | void> {
+    /* default no-op. Adapters can override if they CAN mutate a native response */
+  }
+
+  protected buildSetCookie(value: string, expired?: boolean): string {
+    const a = [`${this.cookieName}=${encodeURIComponent(value)}`];
+    const o = this.cookieOptions;
+    if (o.path) a.push(`Path=${o.path}`);
+    if (o.domain) a.push(`Domain=${o.domain}`);
+    if (o.maxAge || expired) a.push(`Max-Age=${expired ? 0 : o.maxAge}`);
+    if (o.httpOnly) a.push('HttpOnly');
+    if (o.secure) a.push('Secure');
+    if (o.sameSite) a.push(`SameSite=${o.sameSite}`);
+    if (o.priority) a.push(`Priority=${o.priority}`);
+    if (o.partitioned) a.push('Partitioned');
+    return a.join('; ');
+  }
+
   abstract getSession(request: TRequest): Promise<string | null>;
 
-  abstract saveSession(
-    response: TResponse,
+  async saveSession(
+    response: TResponse | undefined,
     sessionData: string,
-  ): Promise<TResponse>;
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const header = this.buildSetCookie(sessionData);
+    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
+    return mutated ?? { headers: { 'Set-Cookie': header } };
+  }
 
-  abstract clearSession(response: TResponse): Promise<TResponse>;
+  async clearSession(
+    response: TResponse,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const header = this.buildSetCookie('', true);
+    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
+    return mutated ?? { headers: { 'Set-Cookie': header } };
+  }
 }
