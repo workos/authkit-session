@@ -63,7 +63,7 @@ export class SessionManager<TRequest, TResponse> {
     }
   }
 
-  async getSession(request: TRequest): Promise<Session | null> {
+  private async getSession(request: TRequest): Promise<Session | null> {
     const encryptedSession = await this.storage.getSession(request);
     if (!encryptedSession) {
       return null;
