@@ -87,15 +87,3 @@ export interface SessionEncryption {
     },
   ) => Promise<T>;
 }
-
-export interface CookieOptions {
-  path?: string;
-  domain?: string;
-  maxAge?: number;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: 'lax' | 'strict' | 'none';
-  priority?: 'low' | 'medium' | 'high';
-  partitioned?: boolean;
-}
