@@ -9,6 +9,7 @@ import type { TokenManager } from './TokenManager';
 import type {
   AuthResult,
   CustomClaims,
+  HeadersBag,
   Session,
   SessionStorage,
 } from './types';
@@ -227,8 +228,8 @@ export class SessionManager<TRequest, TResponse> {
 
   async createSession(
     authResponse: AuthenticationResponse,
-    response: TResponse,
-  ): Promise<TResponse> {
+    response: TResponse | undefined,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
     const { accessToken, refreshToken, user, impersonator } = authResponse;
     if (!accessToken || !refreshToken) {
       throw new AuthKitError('Missing access or refresh token');
@@ -252,7 +253,8 @@ export class SessionManager<TRequest, TResponse> {
     response: TResponse,
     organizationId: string,
   ): Promise<{
-    response: TResponse;
+    response?: TResponse;
+    headers?: HeadersBag;
     authResult: AuthResult<TCustomClaims>;
   }> {
     const session = await this.getSession(request);
@@ -274,7 +276,8 @@ export class SessionManager<TRequest, TResponse> {
       );
 
       return {
-        response: updatedResponse,
+        response: updatedResponse.response,
+        headers: updatedResponse.headers,
         authResult: {
           user: refreshResult.user,
           sessionId: refreshResult.sessionId,
@@ -327,7 +330,8 @@ export class SessionManager<TRequest, TResponse> {
     response: TResponse,
     options?: { returnTo?: string },
   ): Promise<{
-    response: TResponse;
+    response?: TResponse;
+    headers?: HeadersBag;
     logoutUrl: string;
   }> {
     const claims = this.tokenManager.parseTokenClaims(session.accessToken);
@@ -343,7 +347,7 @@ export class SessionManager<TRequest, TResponse> {
     }
 
     // Clear the session cookie locally
-    const clearedResponse = await this.storage.clearSession(response);
+    const cleared = await this.storage.clearSession(response);
 
     // Generate logout URL (for completeness, though session is already revoked)
     const logoutUrl = this.client.userManagement.getLogoutUrl({
@@ -352,7 +356,8 @@ export class SessionManager<TRequest, TResponse> {
     });
 
     return {
-      response: clearedResponse,
+      response: cleared.response,
+      headers: cleared.headers,
       logoutUrl,
     };
   }

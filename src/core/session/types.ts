@@ -44,6 +44,8 @@ export interface Session {
   impersonator?: Impersonator;
 }
 
+export type HeadersBag = Record<string, string | string[]>;
+
 export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
   /*
    * Extract session data from a request object
@@ -60,16 +62,19 @@ export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
    * @returns The framework-specific response object with the session cookie set.
    */
   saveSession(
-    response: TResponse,
+    response: TResponse | undefined,
     sessionData: string,
     options?: TOptions,
-  ): Promise<TResponse>;
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
 
   /**
    * @param response The frmework-specific response object.
    * @returns The framework-specific response object with the session cookie removed.
    */
-  clearSession(response: TResponse, options?: TOptions): Promise<TResponse>;
+  clearSession(
+    response: TResponse | undefined,
+    options?: TOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
 }
 
 export interface SessionEncryption {
