@@ -133,6 +133,31 @@ export class ConfigurationProvider {
   }
 
   getConfig(): AuthKitConfig {
-    return this.config as AuthKitConfig;
+    // Build a complete config by merging stored config with environment variables
+    const fullConfig = {} as AuthKitConfig;
+
+    // Get all keys from the stored config and required keys
+    const allKeys = new Set<keyof AuthKitConfig>([
+      ...(Object.keys(this.config) as (keyof AuthKitConfig)[]),
+      ...this.requiredKeys,
+    ]);
+
+    // Merge each key, with environment variables taking precedence
+    for (const key of allKeys) {
+      try {
+        const value = this.getValue(key);
+        if (value !== undefined) {
+          (fullConfig as any)[key] = value;
+        }
+      } catch (error) {
+        // If a required key is missing, let the error bubble up
+        if (this.requiredKeys.includes(key)) {
+          throw error;
+        }
+        // For optional keys, continue without the value
+      }
+    }
+
+    return fullConfig;
   }
 }

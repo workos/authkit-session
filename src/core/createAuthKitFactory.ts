@@ -141,13 +141,14 @@ export const createAuthKitFactory = once(function createAuthKit<
       response: TResponse,
       options: { code: string; state?: string },
     ) => {
-      const client = clientFactory(getFullConfig());
       const config = getFullConfig();
+      const clientId = config.clientId;
+      const client = clientFactory(config);
 
       // Authenticate with the OAuth code
       const authResponse = await client.userManagement.authenticateWithCode({
         code: options.code,
-        clientId: config.clientId,
+        clientId,
       });
 
       // Create session using SessionManager
