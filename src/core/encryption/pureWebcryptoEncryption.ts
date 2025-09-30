@@ -1,4 +1,4 @@
-import type { SessionEncryption as SessionEncryptionInterface } from '../session/types';
+import type { SessionEncryption as SessionEncryptionInterface } from '../session/types.js';
 
 /**
  * Pure WebCrypto implementation compatible with iron-session

@@ -1,5 +1,15 @@
 import { seal as sealData, unseal as unsealData } from 'iron-webcrypto';
-import type { SessionEncryption as SessionEncryptionInterface } from '../session/types';
+import type { SessionEncryption as SessionEncryptionInterface } from '../session/types.js';
+
+// Extract the precise Crypto type that iron-webcrypto expects
+// This avoids importing iron-webcrypto's private _Crypto type
+type IronCrypto = Parameters<typeof sealData>[0];
+
+// Cast globalThis.crypto to iron-webcrypto's expected type
+// Runtime-safe: DOM Crypto is fully compatible with iron-webcrypto's _Crypto
+// Type-level workaround: iron-webcrypto's _Crypto expects Uint8Array<ArrayBuffer>
+// while DOM Crypto provides Uint8Array<ArrayBufferLike>
+const ironCrypto: IronCrypto = globalThis.crypto as unknown as IronCrypto;
 
 /**
  * A compatible implementation that works with iron-session
@@ -33,7 +43,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
     };
 
     // Seal the data using iron-webcrypto with properly formatted password
-    const seal = await sealData(globalThis.crypto, data, passwordObj, {
+    const seal = await sealData(ironCrypto, data, passwordObj, {
       encryption: {
         saltBits: 256,
         algorithm: 'aes-256-cbc',
@@ -67,28 +77,23 @@ export class SessionEncryption implements SessionEncryptionInterface {
     const passwordMap = { 1: password };
 
     // Use iron-webcrypto's unseal function
-    const data = await unsealData(
-      globalThis.crypto,
-      sealWithoutVersion,
-      passwordMap,
-      {
-        encryption: {
-          saltBits: 256,
-          algorithm: 'aes-256-cbc',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        integrity: {
-          saltBits: 256,
-          algorithm: 'sha256',
-          iterations: 1,
-          minPasswordlength: 32,
-        },
-        ttl: 0,
-        timestampSkewSec: 60,
-        localtimeOffsetMsec: 0,
+    const data = await unsealData(ironCrypto, sealWithoutVersion, passwordMap, {
+      encryption: {
+        saltBits: 256,
+        algorithm: 'aes-256-cbc',
+        iterations: 1,
+        minPasswordlength: 32,
       },
-    );
+      integrity: {
+        saltBits: 256,
+        algorithm: 'sha256',
+        iterations: 1,
+        minPasswordlength: 32,
+      },
+      ttl: 0,
+      timestampSkewSec: 60,
+      localtimeOffsetMsec: 0,
+    });
 
     // Check the token version if needed
     if (tokenVersion === 2) {

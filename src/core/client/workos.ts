@@ -1,7 +1,7 @@
 import { WorkOS } from '@workos-inc/node';
-import { getConfig } from '../config';
-import { once } from '../../utils';
-import { version } from '../../../package.json';
+import { getConfig } from '../config.js';
+import { once } from '../../utils.js';
+import pkg from '../../../package.json' with { type: 'json' };
 
 /**
  * Create a WorkOS instance with the provided API key and optional settings.
@@ -21,7 +21,7 @@ export function createWorkOSInstance() {
     port: apiPort,
     appInfo: {
       name: 'authkit-session',
-      version,
+      version: pkg.version,
     },
   };
 

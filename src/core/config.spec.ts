@@ -4,8 +4,8 @@ import {
   getConfig,
   getConfigurationProvider,
   getFullConfig,
-} from './config';
-import { ConfigurationProvider } from './config/ConfigurationProvider';
+} from './config.js';
+import { ConfigurationProvider } from './config/ConfigurationProvider.js';
 
 describe('config', () => {
   let originalProvider: ConfigurationProvider;
