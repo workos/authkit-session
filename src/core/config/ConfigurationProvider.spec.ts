@@ -111,7 +111,14 @@ describe('ConfigurationProvider', () => {
 
   describe('getConfig()', () => {
     it('returns current config as AuthKitConfig', () => {
-      provider.configure({ cookieName: 'test-cookie' });
+      const validPassword = 'a'.repeat(32);
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: validPassword,
+        cookieName: 'test-cookie',
+      });
 
       const config = provider.getConfig();
       expect(config.cookieName).toBe('test-cookie');

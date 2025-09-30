@@ -99,7 +99,12 @@ describe('config', () => {
   describe('getFullConfig()', () => {
     it('returns config object', () => {
       const validPassword = 'a'.repeat(32);
-      configure({ clientId: 'test-client', cookiePassword: validPassword });
+      configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: validPassword,
+      });
 
       const config = getFullConfig();
       expect(config).toMatchObject({ clientId: 'test-client' });
