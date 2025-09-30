@@ -19,14 +19,6 @@ class TestCookieSessionStorage extends CookieSessionStorage<string, string> {
   async getSession(): Promise<string | null> {
     return null;
   }
-
-  async saveSession(response: string): Promise<string> {
-    return response;
-  }
-
-  async clearSession(response: string): Promise<string> {
-    return response;
-  }
 }
 
 describe('CookieSessionStorage', () => {
@@ -56,7 +48,7 @@ describe('CookieSessionStorage', () => {
       const config = createMockConfig({ cookieName: '' });
       const storage = new TestCookieSessionStorage(config as any);
 
-      expect(storage['cookieName']).toBe('workos_session');
+      expect(storage['cookieName']).toBe('wos_session');
     });
 
     it('uses custom sameSite setting', () => {
@@ -105,7 +97,7 @@ describe('CookieSessionStorage', () => {
       });
       const storage = new TestCookieSessionStorage(config as any);
 
-      expect(storage['cookieName']).toBe('workos_session');
+      expect(storage['cookieName']).toBe('wos_session');
       expect(storage['cookieOptions']).toEqual({
         path: '/',
         httpOnly: true,
@@ -132,11 +124,13 @@ describe('CookieSessionStorage', () => {
       const session = await storage.getSession();
       expect(session).toBeNull();
 
-      const savedResponse = await storage.saveSession('response');
-      expect(savedResponse).toBe('response');
+      const savedResult = await storage.saveSession(undefined, 'session-data');
+      expect(savedResult).toHaveProperty('headers');
+      expect(savedResult.headers).toHaveProperty('Set-Cookie');
 
-      const clearedResponse = await storage.clearSession('response');
-      expect(clearedResponse).toBe('response');
+      const clearedResult = await storage.clearSession('response');
+      expect(clearedResult).toHaveProperty('headers');
+      expect(clearedResult.headers).toHaveProperty('Set-Cookie');
     });
   });
 });

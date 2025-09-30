@@ -34,8 +34,8 @@ const mockUser = {
 
 const mockStorage = {
   getSession: async () => null,
-  saveSession: async (response: any) => response,
-  clearSession: async (response: any) => response,
+  saveSession: async (response: any) => ({ response }),
+  clearSession: async (response: any) => ({ response }),
 };
 
 const mockTokenManager = {
@@ -169,7 +169,7 @@ describe('SessionManager', () => {
         'response',
       );
 
-      expect(result).toBe('response');
+      expect(result.response).toBe('response');
     });
 
     it('throws error when tokens are missing', async () => {
