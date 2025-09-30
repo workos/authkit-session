@@ -1,17 +1,21 @@
 import type { WorkOS } from '@workos-inc/node';
-import { once } from '../utils';
-import { getWorkOS } from './client/workos';
-import { getConfig, getConfigurationProvider, getFullConfig } from './config';
-import type { AuthKitConfig } from './config/types';
-import sessionEncryption from './encryption/ironWebcryptoEncryption';
-import { SessionManager } from './session/SessionManager';
-import TokenManager from './session/TokenManager';
+import { once } from '../utils.js';
+import { getWorkOS } from './client/workos.js';
+import {
+  getConfig,
+  getConfigurationProvider,
+  getFullConfig,
+} from './config.js';
+import type { AuthKitConfig } from './config/types.js';
+import sessionEncryption from './encryption/ironWebcryptoEncryption.js';
+import { SessionManager } from './session/SessionManager.js';
+import TokenManager from './session/TokenManager.js';
 import type {
   BaseTokenClaims,
   CustomClaims,
   SessionEncryption,
   SessionStorage,
-} from './session/types';
+} from './session/types.js';
 
 export const createAuthKitFactory = once(function createAuthKit<
   TRequest,

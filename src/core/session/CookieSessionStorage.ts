@@ -1,5 +1,5 @@
-import type { ConfigurationProvider } from '../config/ConfigurationProvider';
-import type { HeadersBag, SessionStorage } from './types';
+import type { ConfigurationProvider } from '../config/ConfigurationProvider.js';
+import type { HeadersBag, SessionStorage } from './types.js';
 
 export interface CookieOptions {
   path?: string;

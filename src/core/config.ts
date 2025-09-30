@@ -1,6 +1,6 @@
-import { once } from '../utils';
-import { ConfigurationProvider } from './config/ConfigurationProvider';
-import type { AuthKitConfig, ValueSource } from './config/types';
+import { once } from '../utils.js';
+import { ConfigurationProvider } from './config/ConfigurationProvider.js';
+import type { AuthKitConfig, ValueSource } from './config/types.js';
 
 const getConfigurationInstance = once(() => new ConfigurationProvider());
 

@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
-import { once } from '../../utils';
-import type { BaseTokenClaims, CustomClaims } from './types';
+import { once } from '../../utils.js';
+import type { BaseTokenClaims, CustomClaims } from './types.js';
 import type { WorkOS } from '@workos-inc/node';
 
 export class TokenManager {

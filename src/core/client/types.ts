@@ -1,9 +1,4 @@
-import type {
-  User,
-  Impersonator,
-  Organization,
-  WorkOS,
-} from '@workos-inc/node';
+import type { User, Impersonator, WorkOS } from '@workos-inc/node';
 export interface UserManagementInterface {
   getAuthorizationUrl: (options: AuthorizationURLOptions) => string;
   authenticateWithCode: (

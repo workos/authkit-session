@@ -11,14 +11,11 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "module": "preserve",
-    "noEmit": true,
-    "erasableSyntaxOnly": true,
-    "outDir": "dist",
-    "sourceMap": true,
-    "declaration": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": ["es2022", "dom"],
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.json", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts"]
 }

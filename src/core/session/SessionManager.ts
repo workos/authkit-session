@@ -1,19 +1,19 @@
-import type { ConfigurationProvider } from '../config/ConfigurationProvider';
+import type { ConfigurationProvider } from '../config/ConfigurationProvider.js';
 import {
   AuthKitError,
   SessionEncryptionError,
   TokenRefreshError,
-} from '../errors';
-import type { AuthenticationResponse } from '../client/types';
-import type { TokenManager } from './TokenManager';
+} from '../errors.js';
+import type { AuthenticationResponse } from '../client/types.js';
+import type { TokenManager } from './TokenManager.js';
 import type {
   AuthResult,
   CustomClaims,
   HeadersBag,
   Session,
   SessionStorage,
-} from './types';
-import type { SessionEncryption } from './types';
+} from './types.js';
+import type { SessionEncryption } from './types.js';
 import type { WorkOS } from '@workos-inc/node';
 
 export class SessionManager<TRequest, TResponse> {
@@ -77,58 +77,48 @@ export class SessionManager<TRequest, TResponse> {
   ) {
     try {
       const session = await this.decryptSession(encryptedSession);
-      return await this.validateAndRefreshIfNeeded<TCustomClaims>(session);
-    } catch (error) {
+      const isValid = await this.tokenManager.verifyToken(session.accessToken);
+      const isExpiring = this.tokenManager.isTokenExpiring(session.accessToken);
+
+      // Token is valid and not expiring - return immediately
+      if (isValid && !isExpiring) {
+        const claims = this.tokenManager.parseTokenClaims<TCustomClaims>(
+          session.accessToken,
+        );
+        return {
+          valid: true,
+          session,
+          claims,
+        };
+      }
+
+      // Token needs refresh
+      try {
+        const refreshResult = await this.refreshSession<TCustomClaims>(session);
+        return {
+          valid: true,
+          session: refreshResult.session,
+          claims: refreshResult.claims,
+        };
+      } catch (refreshError) {
+        return {
+          valid: false,
+          error:
+            refreshError instanceof Error
+              ? refreshError
+              : new TokenRefreshError(
+                  'Failed to refresh session',
+                  refreshError,
+                ),
+        };
+      }
+    } catch (decryptError) {
       return {
         valid: false,
         error:
-          error instanceof Error
-            ? error
-            : new AuthKitError('Failed to decrypt session', error),
-      };
-    }
-  }
-
-  private async validateAndRefreshIfNeeded<TCustomClaims = CustomClaims>(
-    session: Session,
-  ) {
-    const isValid = await this.tokenManager.verifyToken(session.accessToken);
-    const isExpiring = this.tokenManager.isTokenExpiring(session.accessToken);
-
-    // Refresh if token is invalid or expiring
-    if (!isValid || isExpiring) {
-      return await this.attemptTokenRefresh<TCustomClaims>(session);
-    }
-
-    // Token is valid and not expiring, parse claims
-    const claims = this.tokenManager.parseTokenClaims<TCustomClaims>(
-      session.accessToken,
-    );
-
-    return {
-      valid: true,
-      session,
-      claims,
-    };
-  }
-
-  private async attemptTokenRefresh<TCustomClaims = CustomClaims>(
-    session: Session,
-  ) {
-    try {
-      const refreshResult = await this.refreshSession<TCustomClaims>(session);
-      return {
-        valid: true,
-        session: refreshResult.session,
-        claims: refreshResult.claims,
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        error:
-          error instanceof Error
-            ? error
-            : new TokenRefreshError('Failed to refresh session', error),
+          decryptError instanceof Error
+            ? decryptError
+            : new AuthKitError('Failed to decrypt session', decryptError),
       };
     }
   }
