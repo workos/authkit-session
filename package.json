@@ -33,7 +33,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@workos-inc/node": "^7.70.0",
+    "@workos-inc/node": "^8.0.0-beta.4",
     "iron-session": "^8.0.4",
     "iron-webcrypto": "^1.2.1",
     "jose": "^6.0.12"

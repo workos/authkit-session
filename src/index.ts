@@ -9,4 +9,4 @@ export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
 export { createAuthKitFactory } from './core/createAuthKitFactory.js';
 export * from './core/session/types.js';
 export * from './core/config/types.js';
-export type { User, Impersonator, Organization } from '@workos-inc/node';
+export type { User, Impersonator, Organization, WorkOS, AuthenticationResponse } from '@workos-inc/node';
