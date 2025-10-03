@@ -69,11 +69,6 @@ export class ConfigurationProvider {
       this.updateConfig(configOrSource);
       this.setValueSource(source);
     }
-
-    // Validate the cookiePassword if provided
-    if (this.config.cookiePassword && this.config.cookiePassword.length < 32) {
-      throw new Error('cookiePassword must be at least 32 characters long');
-    }
   }
 
   getValue<K extends keyof AuthKitConfig>(key: K): AuthKitConfig[K] {
@@ -130,6 +125,55 @@ export class ConfigurationProvider {
     }
 
     return value as AuthKitConfig[K];
+  }
+
+  /**
+   * Validates that all required configuration values are present and meet requirements.
+   * Collects all validation errors before throwing to provide comprehensive feedback.
+   *
+   * @throws {Error} If any required configuration is missing or invalid
+   *
+   * @example
+   * ```typescript
+   * const provider = new ConfigurationProvider();
+   * try {
+   *   provider.validate();
+   * } catch (error) {
+   *   console.error(error.message); // Shows all missing/invalid config at once
+   * }
+   * ```
+   */
+  validate(): void {
+    const errors: string[] = [];
+
+    // Validate each required key
+    for (const key of this.requiredKeys) {
+      const envKey = this.getEnvironmentVariableName(key);
+      const envValue = this.getEnvironmentValue(envKey);
+      const configValue = this.config[key];
+      const value = envValue ?? configValue;
+
+      if (!value) {
+        errors.push(`${envKey} is required`);
+      } else if (key === 'cookiePassword') {
+        // Special validation for cookiePassword length
+        const password = String(value);
+        if (password.length < 32) {
+          errors.push(
+            `${envKey} must be at least 32 characters (currently ${password.length})`,
+          );
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(
+        'AuthKit configuration error. Missing or invalid environment variables:\n\n' +
+          errors.map(e => `  • ${e}`).join('\n') +
+          '\n\nSet these environment variables or call configure() with the required values.' +
+          '\nGet your values from the WorkOS Dashboard: https://dashboard.workos.com',
+      );
+    }
   }
 
   getConfig(): AuthKitConfig {
