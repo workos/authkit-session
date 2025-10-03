@@ -4,6 +4,7 @@ import {
   getConfig,
   getConfigurationProvider,
   getFullConfig,
+  validateConfig,
 } from './config.js';
 import { ConfigurationProvider } from './config/ConfigurationProvider.js';
 
@@ -46,12 +47,10 @@ describe('config', () => {
       expect(() => configure(config, source)).not.toThrow();
     });
 
-    it('throws on short cookie password', () => {
+    it('accepts short cookie password (validation happens in validateConfig)', () => {
       const config = { cookiePassword: 'short' };
 
-      expect(() => configure(config)).toThrow(
-        'cookiePassword must be at least 32 characters long',
-      );
+      expect(() => configure(config)).not.toThrow();
     });
   });
 
@@ -108,6 +107,52 @@ describe('config', () => {
 
       const config = getFullConfig();
       expect(config).toMatchObject({ clientId: 'test-client' });
+    });
+  });
+
+  describe('validateConfig()', () => {
+    it('passes with all required config', () => {
+      const validPassword = 'a'.repeat(32);
+      configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: validPassword,
+      });
+
+      expect(() => validateConfig()).not.toThrow();
+    });
+
+    it('throws with batch of missing fields', () => {
+      expect(() => validateConfig()).toThrow(
+        /AuthKit configuration error\. Missing or invalid environment variables/,
+      );
+    });
+
+    it('shows all missing fields at once', () => {
+      expect(() => validateConfig()).toThrow(/WORKOS_CLIENT_ID is required/);
+      expect(() => validateConfig()).toThrow(/WORKOS_API_KEY is required/);
+      expect(() => validateConfig()).toThrow(/WORKOS_REDIRECT_URI is required/);
+      expect(() => validateConfig()).toThrow(/WORKOS_COOKIE_PASSWORD is required/);
+    });
+
+    it('throws for short cookie password', () => {
+      configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: 'short',
+      });
+
+      expect(() => validateConfig()).toThrow(
+        /WORKOS_COOKIE_PASSWORD must be at least 32 characters \(currently 5\)/,
+      );
+    });
+
+    it('includes dashboard link in error', () => {
+      expect(() => validateConfig()).toThrow(
+        /Get your values from the WorkOS Dashboard: https:\/\/dashboard\.workos\.com/,
+      );
     });
   });
 });

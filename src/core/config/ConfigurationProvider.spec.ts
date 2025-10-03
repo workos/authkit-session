@@ -29,12 +29,6 @@ describe('ConfigurationProvider', () => {
 
       expect(provider.getValue('cookieName')).toBe('custom');
     });
-
-    it('throws on short cookie password', () => {
-      expect(() => provider.configure({ cookiePassword: 'short' })).toThrow(
-        'cookiePassword must be at least 32 characters long',
-      );
-    });
   });
 
   describe('getValue()', () => {
@@ -122,6 +116,86 @@ describe('ConfigurationProvider', () => {
 
       const config = provider.getConfig();
       expect(config.cookieName).toBe('test-cookie');
+    });
+  });
+
+  describe('validate()', () => {
+    it('passes validation with all required config', () => {
+      const validPassword = 'a'.repeat(32);
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: validPassword,
+      });
+
+      expect(() => provider.validate()).not.toThrow();
+    });
+
+    it('throws with all missing required fields at once', () => {
+      expect(() => provider.validate()).toThrow(
+        /AuthKit configuration error\. Missing or invalid environment variables:\n\n  • WORKOS_CLIENT_ID is required\n  • WORKOS_API_KEY is required\n  • WORKOS_REDIRECT_URI is required\n  • WORKOS_COOKIE_PASSWORD is required/,
+      );
+    });
+
+    it('throws with helpful message for short cookiePassword', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: 'short',
+      });
+
+      expect(() => provider.validate()).toThrow(
+        /WORKOS_COOKIE_PASSWORD must be at least 32 characters \(currently 5\)/,
+      );
+    });
+
+    it('includes dashboard link in error message', () => {
+      expect(() => provider.validate()).toThrow(
+        /Get your values from the WorkOS Dashboard: https:\/\/dashboard\.workos\.com/,
+      );
+    });
+
+    it('shows current length of invalid cookiePassword', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: '12345678901234567890', // 20 chars
+      });
+
+      expect(() => provider.validate()).toThrow(
+        /WORKOS_COOKIE_PASSWORD must be at least 32 characters \(currently 20\)/,
+      );
+    });
+
+    it('collects multiple errors including password length', () => {
+      provider.configure({
+        clientId: 'test-client',
+        cookiePassword: 'too-short',
+      });
+
+      const error = () => provider.validate();
+      expect(error).toThrow(/WORKOS_API_KEY is required/);
+      expect(error).toThrow(/WORKOS_REDIRECT_URI is required/);
+      expect(error).toThrow(
+        /WORKOS_COOKIE_PASSWORD must be at least 32 characters/,
+      );
+    });
+
+    it('prefers environment values over config in validation', () => {
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_COOKIE_PASSWORD') return 'a'.repeat(32);
+        if (key === 'WORKOS_CLIENT_ID') return 'env-client';
+        if (key === 'WORKOS_API_KEY') return 'env-api-key';
+        if (key === 'WORKOS_REDIRECT_URI')
+          return 'http://localhost:3000/callback';
+        return undefined;
+      });
+      provider.configure(source);
+
+      expect(() => provider.validate()).not.toThrow();
     });
   });
 });

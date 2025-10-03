@@ -67,3 +67,29 @@ export function getConfigurationProvider(): ConfigurationProvider {
 export function getFullConfig(): AuthKitConfig {
   return getConfigurationInstance().getConfig();
 }
+
+/**
+ * Validates that all required configuration values are present and meet requirements.
+ * Collects all validation errors before throwing to provide comprehensive feedback.
+ *
+ * This is useful to call early in your application lifecycle to fail fast with
+ * helpful error messages showing all missing/invalid configuration at once.
+ *
+ * @throws {Error} If any required configuration is missing or invalid
+ *
+ * @example
+ * ```typescript
+ * import { validateConfig } from '@workos/authkit-session';
+ *
+ * // Validate configuration on startup
+ * try {
+ *   validateConfig();
+ * } catch (error) {
+ *   console.error(error.message); // Shows all missing config at once
+ *   process.exit(1);
+ * }
+ * ```
+ */
+export function validateConfig(): void {
+  return getConfigurationInstance().validate();
+}
