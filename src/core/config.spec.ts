@@ -133,7 +133,9 @@ describe('config', () => {
       expect(() => validateConfig()).toThrow(/WORKOS_CLIENT_ID is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_API_KEY is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_REDIRECT_URI is required/);
-      expect(() => validateConfig()).toThrow(/WORKOS_COOKIE_PASSWORD is required/);
+      expect(() => validateConfig()).toThrow(
+        /WORKOS_COOKIE_PASSWORD is required/,
+      );
     });
 
     it('throws for short cookie password', () => {
