@@ -197,18 +197,27 @@ export class SessionManager<TRequest, TResponse> {
   }
 
   async getAuthorizationUrl({
-    returnPathname = '/',
+    returnPathname,
     redirectUri,
     screenHint,
+    organizationId,
+    loginHint,
+    prompt,
   }: {
     returnPathname?: string;
     redirectUri?: string;
     screenHint?: 'sign-up' | 'sign-in';
-  }): Promise<string> {
+    organizationId?: string;
+    loginHint?: string;
+    prompt?: 'login' | 'none' | 'consent' | 'select_account';
+  } = {}): Promise<string> {
     return this.client.userManagement.getAuthorizationUrl({
       provider: 'authkit',
       redirectUri: redirectUri ?? this.config.getValue('redirectUri'),
       screenHint,
+      organizationId,
+      loginHint,
+      prompt,
       clientId: this.config.getValue('clientId'),
       state: returnPathname
         ? btoa(JSON.stringify({ returnPathname }))

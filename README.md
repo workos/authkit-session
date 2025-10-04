@@ -388,7 +388,7 @@ AuthKit can be configured in multiple ways:
 
 ### Environment Variables
 
-```
+```bash
 WORKOS_CLIENT_ID=your-client-id
 WORKOS_API_KEY=your-api-key
 WORKOS_REDIRECT_URI=https://yourdomain.com/auth/callback
@@ -399,6 +399,17 @@ WORKOS_API_HOSTNAME=api.workos.com
 WORKOS_API_HTTPS=true
 WORKOS_API_PORT=443
 ```
+
+**Environment Variable Naming Convention:**
+Environment variables follow the pattern: `WORKOS_{PROPERTY_NAME}` where the property name is converted from camelCase to UPPER_SNAKE_CASE.
+
+Examples:
+- `clientId` → `WORKOS_CLIENT_ID`
+- `redirectUri` → `WORKOS_REDIRECT_URI`
+- `cookiePassword` → `WORKOS_COOKIE_PASSWORD`
+- `cookieMaxAge` → `WORKOS_COOKIE_MAX_AGE`
+
+Environment variables always take precedence over programmatic configuration.
 
 ### Programmatic Configuration
 
