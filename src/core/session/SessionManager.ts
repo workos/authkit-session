@@ -9,11 +9,12 @@ import type { TokenManager } from './TokenManager.js';
 import type {
   AuthResult,
   CustomClaims,
+  GetAuthorizationUrlOptions,
   HeadersBag,
   Session,
   SessionStorage,
+  SessionEncryption,
 } from './types.js';
-import type { SessionEncryption } from './types.js';
 import type { WorkOS } from '@workos-inc/node';
 
 export class SessionManager<TRequest, TResponse> {
@@ -203,14 +204,7 @@ export class SessionManager<TRequest, TResponse> {
     organizationId,
     loginHint,
     prompt,
-  }: {
-    returnPathname?: string;
-    redirectUri?: string;
-    screenHint?: 'sign-up' | 'sign-in';
-    organizationId?: string;
-    loginHint?: string;
-    prompt?: 'login' | 'none' | 'consent' | 'select_account';
-  } = {}): Promise<string> {
+  }: GetAuthorizationUrlOptions = {}): Promise<string> {
     return this.client.userManagement.getAuthorizationUrl({
       provider: 'authkit',
       redirectUri: redirectUri ?? this.config.getValue('redirectUri'),

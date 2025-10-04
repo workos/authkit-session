@@ -11,6 +11,7 @@ import sessionEncryption from './encryption/ironWebcryptoEncryption.js';
 import { SessionManager } from './session/SessionManager.js';
 import TokenManager from './session/TokenManager.js';
 import type {
+  AuthUrlOptions,
   BaseTokenClaims,
   CustomClaims,
   SessionEncryption,
@@ -68,25 +69,13 @@ export const createAuthKitFactory = once(function createAuthKit<
       ...args: Parameters<SessionStorage<TRequest, TResponse>['saveSession']>
     ) => sessionStorageFactory(getFullConfig()).saveSession(...args),
 
-    getSignInUrl: (options?: {
-      returnPathname?: string;
-      redirectUri?: string;
-      organizationId?: string;
-      loginHint?: string;
-      prompt?: 'login' | 'none' | 'consent' | 'select_account';
-    }) =>
+    getSignInUrl: (options?: AuthUrlOptions) =>
       getSessionManager().getAuthorizationUrl({
         ...options,
         screenHint: 'sign-in',
       }),
 
-    getSignUpUrl: (options?: {
-      returnPathname?: string;
-      redirectUri?: string;
-      organizationId?: string;
-      loginHint?: string;
-      prompt?: 'login' | 'none' | 'consent' | 'select_account';
-    }) =>
+    getSignUpUrl: (options?: AuthUrlOptions) =>
       getSessionManager().getAuthorizationUrl({
         ...options,
         screenHint: 'sign-up',
