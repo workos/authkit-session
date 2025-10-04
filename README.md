@@ -443,6 +443,7 @@ WORKOS_API_PORT=443
 Environment variables follow the pattern: `WORKOS_{PROPERTY_NAME}` where the property name is converted from camelCase to UPPER_SNAKE_CASE.
 
 Examples:
+
 - `clientId` → `WORKOS_CLIENT_ID`
 - `redirectUri` → `WORKOS_REDIRECT_URI`
 - `cookiePassword` → `WORKOS_COOKIE_PASSWORD`
