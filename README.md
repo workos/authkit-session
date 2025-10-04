@@ -144,13 +144,19 @@ const authUrl = await authKit.getAuthorizationUrl({
   returnPathname: '/dashboard',
   redirectUri: 'https://yourdomain.com/auth/callback',
   screenHint: 'sign-in', // or 'sign-up'
+  organizationId: 'org_123', // Optional: pre-select organization
+  loginHint: 'user@example.com', // Optional: pre-fill email
+  prompt: 'login', // Optional: force re-authentication
 });
 
-// Generate sign-in/sign-up URLs
+// Generate sign-in/sign-up URLs (convenience methods)
 const signInUrl = await authKit.getSignInUrl({
+  returnPathname: '/dashboard',
   redirectUri: 'https://yourdomain.com/auth/callback',
+  organizationId: 'org_123', // Optional
 });
 const signUpUrl = await authKit.getSignUpUrl({
+  returnPathname: '/welcome',
   redirectUri: 'https://yourdomain.com/auth/callback',
 });
 
@@ -251,6 +257,39 @@ export async function handleCallback(event: RequestEvent) {
 - **Routing Integration**: Provide helpers for authentication routes (`/auth/signin`, `/auth/callback`, `/auth/signout`)
 - **TypeScript Support**: Export proper types for your framework's patterns
 - **Error Handling**: Wrap AuthKit errors in framework-appropriate error types
+
+### Configuration Validation
+
+Framework adapters should validate configuration on startup to provide clear error messages:
+
+```typescript
+import { validateConfig } from '@workos/authkit-session';
+
+// In your framework's initialization or middleware
+try {
+  validateConfig();
+} catch (error) {
+  // Framework will display helpful error message with all missing/invalid config
+  throw error;
+}
+```
+
+The `validateConfig()` function performs batch validation, collecting all configuration errors before throwing. This provides developers with a complete picture of what needs to be fixed, rather than discovering issues one at a time.
+
+### Accessing Configuration
+
+Framework adapters can access configuration values directly:
+
+```typescript
+import { getConfig, getConfigurationProvider } from '@workos/authkit-session';
+
+// Get a single config value
+const clientId = getConfig('clientId');
+
+// Get the ConfigurationProvider for more advanced use
+const provider = getConfigurationProvider();
+const config = provider.getConfig(); // Returns full AuthKitConfig object
+```
 
 ## Core Concepts
 
@@ -436,7 +475,9 @@ configure({
 ### Core API
 
 - `configure(config)`: Set up AuthKit with your WorkOS configuration
+- `validateConfig()`: Validate all required configuration values are present and valid (throws descriptive error if not)
 - `getConfig(key)`: Get a specific configuration value
+- `getConfigurationProvider()`: Get the ConfigurationProvider instance for advanced configuration access
 - `createAuthKitFactory(options)`: Create an instance of AuthKit for your framework
 
 ### AuthKit Instance API
@@ -453,9 +494,12 @@ configure({
 
 #### URL Generation
 
-- `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL with `returnPathname`, `redirectUri`, and `screenHint`
-- `getSignInUrl(options)`: Generate a sign-in URL with `organizationId`, `loginHint`, and `redirectUri`
-- `getSignUpUrl(options)`: Generate a sign-up URL with `organizationId`, `loginHint`, and `redirectUri`
+- `getAuthorizationUrl(options)`: Generate a WorkOS authorization URL
+  - Options: `returnPathname`, `redirectUri`, `screenHint` ('sign-in' | 'sign-up'), `organizationId`, `loginHint`, `prompt` ('login' | 'none' | 'consent' | 'select_account')
+- `getSignInUrl(options)`: Generate a sign-in URL (convenience method with screenHint='sign-in')
+  - Options: `returnPathname`, `redirectUri`, `organizationId`, `loginHint`, `prompt`
+- `getSignUpUrl(options)`: Generate a sign-up URL (convenience method with screenHint='sign-up')
+  - Options: `returnPathname`, `redirectUri`, `organizationId`, `loginHint`, `prompt`
 
 #### Token & Organization Management
 
@@ -552,9 +596,28 @@ The library also exports these components for advanced use cases:
 
 ```typescript
 import {
+  // Core configuration
+  configure, // Set up configuration
+  validateConfig, // Validate all required config values
+  getConfig, // Get specific config value
+  getConfigurationProvider, // Get ConfigurationProvider instance
+  ConfigurationProvider, // ConfigurationProvider class
+
+  // Session management
   SessionManager, // Core session management class
   CookieSessionStorage, // Abstract cookie storage base class
+
+  // WorkOS client
   getWorkOS, // WorkOS client factory
+
+  // Types
+  type SessionStorage,
+  type AuthKitConfig,
+  type AuthResult,
+  type Session,
+  type User,
+  type Impersonator,
+  // ... and more
 } from '@workos/authkit-session';
 ```
 
