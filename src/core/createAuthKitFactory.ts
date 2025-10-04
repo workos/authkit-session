@@ -68,20 +68,24 @@ export const createAuthKitFactory = once(function createAuthKit<
       ...args: Parameters<SessionStorage<TRequest, TResponse>['saveSession']>
     ) => sessionStorageFactory(getFullConfig()).saveSession(...args),
 
-    getSignInUrl: (options: {
+    getSignInUrl: (options?: {
+      returnPathname?: string;
+      redirectUri?: string;
       organizationId?: string;
       loginHint?: string;
-      redirectUri?: string;
+      prompt?: 'login' | 'none' | 'consent' | 'select_account';
     }) =>
       getSessionManager().getAuthorizationUrl({
         ...options,
         screenHint: 'sign-in',
       }),
 
-    getSignUpUrl: (options: {
+    getSignUpUrl: (options?: {
+      returnPathname?: string;
+      redirectUri?: string;
       organizationId?: string;
       loginHint?: string;
-      redirectUri?: string;
+      prompt?: 'login' | 'none' | 'consent' | 'select_account';
     }) =>
       getSessionManager().getAuthorizationUrl({
         ...options,
