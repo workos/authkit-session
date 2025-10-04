@@ -5,6 +5,7 @@ export {
   getConfigurationProvider,
   validateConfig,
 } from './core/config.js';
+export { ConfigurationProvider } from './core/config/ConfigurationProvider.js';
 export { SessionManager } from './core/session/SessionManager.js';
 export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
 export { createAuthKitFactory } from './core/createAuthKitFactory.js';
