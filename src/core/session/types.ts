@@ -104,3 +104,21 @@ export interface CookieOptions {
   priority?: 'low' | 'medium' | 'high';
   partitioned?: boolean;
 }
+
+/**
+ * Options for generating authorization URLs
+ */
+export interface AuthUrlOptions {
+  returnPathname?: string;
+  redirectUri?: string;
+  organizationId?: string;
+  loginHint?: string;
+  prompt?: 'login' | 'none' | 'consent' | 'select_account';
+}
+
+/**
+ * Options for getAuthorizationUrl, including screenHint
+ */
+export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
+  screenHint?: 'sign-up' | 'sign-in';
+}
