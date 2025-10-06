@@ -39,11 +39,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm publish --tag latest --access=public
+          pnpm publish --tag latest --access=public --no-git-checks
 
       - name: Push Pre-Release
         if: ${{ github.event.release.prerelease }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm publish --tag next --access=public
+          pnpm publish --tag next --access=public --no-git-checks
