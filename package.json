@@ -1,6 +1,6 @@
 {
   "name": "@workos/authkit-session",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.build.json",
     "rebuild": "pnpm run clean && pnpm run build",
     "dev": "tsc -p tsconfig.build.json --watch",
+    "prepack": "npm run rebuild",
     "prettier": "prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
