@@ -48,7 +48,11 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     if (o.maxAge || expired) a.push(`Max-Age=${expired ? 0 : o.maxAge}`);
     if (o.httpOnly) a.push('HttpOnly');
     if (o.secure) a.push('Secure');
-    if (o.sameSite) a.push(`SameSite=${o.sameSite}`);
+    if (o.sameSite) {
+      const capitalizedSameSite =
+        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1);
+      a.push(`SameSite=${capitalizedSameSite}`);
+    }
     if (o.priority) a.push(`Priority=${o.priority}`);
     if (o.partitioned) a.push('Partitioned');
     return a.join('; ');

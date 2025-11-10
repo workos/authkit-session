@@ -133,4 +133,21 @@ describe('CookieSessionStorage', () => {
       expect(clearedResult.headers).toHaveProperty('Set-Cookie');
     });
   });
+
+  describe('buildSetCookie', () => {
+    it('capitalizes SameSite values for Safari compatibility', async () => {
+      const testCases = [
+        { input: 'lax', expected: 'SameSite=Lax' },
+        { input: 'strict', expected: 'SameSite=Strict' },
+        { input: 'none', expected: 'SameSite=None' },
+      ];
+
+      for (const { input, expected } of testCases) {
+        const config = createMockConfig({ cookieSameSite: input });
+        const storage = new TestCookieSessionStorage(config as any);
+        const result = await storage.saveSession(undefined, 'test-data');
+        expect(result.headers?.['Set-Cookie']).toContain(expected);
+      }
+    });
+  });
 });
