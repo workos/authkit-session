@@ -23,11 +23,28 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
   constructor(config: ConfigurationProvider) {
     this.config = config;
     this.cookieName = config.getValue('cookieName') || 'wos_session';
+
+    // Infer secure flag from redirectUri if not explicitly set
+    let secure = config.getValue('apiHttps');
+    if (secure === undefined) {
+      const redirectUri = config.getValue('redirectUri');
+      if (redirectUri) {
+        try {
+          const url = new URL(redirectUri);
+          secure = url.protocol === 'https:';
+        } catch {
+          secure = true; // Default to secure if URL parsing fails
+        }
+      } else {
+        secure = true; // Default to secure if no redirectUri
+      }
+    }
+
     this.cookieOptions = {
       path: '/',
       httpOnly: true,
       sameSite: config.getValue('cookieSameSite') ?? 'lax',
-      secure: config.getValue('apiHttps') ?? true,
+      secure,
       maxAge: config.getValue('cookieMaxAge') || 60 * 60 * 24 * 400, // 400 days
       domain: config.getValue('cookieDomain'),
     };
@@ -49,8 +66,7 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     if (o.httpOnly) a.push('HttpOnly');
     if (o.secure) a.push('Secure');
     if (o.sameSite) {
-      const capitalizedSameSite =
-        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1);
+      const capitalizedSameSite = o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
       a.push(`SameSite=${capitalizedSameSite}`);
     }
     if (o.priority) a.push(`Priority=${o.priority}`);
