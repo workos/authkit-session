@@ -1,6 +1,7 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { ConfigurationProvider } from '../core/config/ConfigurationProvider.js';
+import type { AuthKitConfig } from '../core/config/types.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -11,7 +12,6 @@ import type {
   SessionEncryption,
   SessionStorage,
 } from '../core/session/types.js';
-import type { AuthenticationResponse } from '../core/client/types.js';
 
 /**
  * AuthService is the main integration layer for framework adapters.
@@ -23,23 +23,62 @@ import type { AuthenticationResponse } from '../core/client/types.js';
  *
  * This is the ONLY class that uses <TRequest, TResponse> generics.
  * All other classes are framework-agnostic.
+ *
+ * IMPORTANT: Uses lazy initialization via private getters.
+ * This allows configuration to be set AFTER AuthService instantiation
+ * but BEFORE first use - critical for frameworks like Next.js where
+ * there's no clean entry point to call configure().
  */
 export class AuthService<TRequest, TResponse> {
-  private core: AuthKitCore;
-  private operations: AuthOperations;
-  private storage: SessionStorage<TRequest, TResponse>;
-  private config: ConfigurationProvider;
+  private _core?: AuthKitCore;
+  private _operations?: AuthOperations;
+  private readonly storage: SessionStorage<TRequest, TResponse>;
+  private readonly config: ConfigurationProvider;
+  private readonly clientFactory: (config: AuthKitConfig) => WorkOS;
+  private readonly encryptionFactory: (config: AuthKitConfig) => SessionEncryption;
 
   constructor(
     config: ConfigurationProvider,
     storage: SessionStorage<TRequest, TResponse>,
-    client: WorkOS,
-    encryption: SessionEncryption,
+    clientFactory: (config: AuthKitConfig) => WorkOS,
+    encryptionFactory: (config: AuthKitConfig) => SessionEncryption,
   ) {
     this.config = config;
     this.storage = storage;
-    this.core = new AuthKitCore(config, client, encryption);
-    this.operations = new AuthOperations(this.core, client, config);
+    this.clientFactory = clientFactory;
+    this.encryptionFactory = encryptionFactory;
+    // NOTE: core and operations are NOT instantiated here
+    // They're created lazily on first access via getters below
+  }
+
+  /**
+   * Lazy getter for AuthKitCore.
+   * Instantiates on first access, allowing config to be set beforehand.
+   */
+  private get core(): AuthKitCore {
+    if (!this._core) {
+      this._core = new AuthKitCore(
+        this.config,
+        this.clientFactory(this.config.getConfig()),
+        this.encryptionFactory(this.config.getConfig()),
+      );
+    }
+    return this._core;
+  }
+
+  /**
+   * Lazy getter for AuthOperations.
+   * Instantiates on first access, allowing config to be set beforehand.
+   */
+  private get operations(): AuthOperations {
+    if (!this._operations) {
+      this._operations = new AuthOperations(
+        this.core,
+        this.clientFactory(this.config.getConfig()),
+        this.config,
+      );
+    }
+    return this._operations;
   }
 
   /**
@@ -49,8 +88,6 @@ export class AuthService<TRequest, TResponse> {
    * 1. Reads encrypted session from request (via storage)
    * 2. Validates and potentially refreshes the session (via core)
    * 3. Returns auth result + optionally refreshed session data
-   *
-   * TODO(human): Implement this method
    *
    * @param request - Framework-specific request object
    * @returns Auth result and optional refreshed session data
@@ -192,11 +229,10 @@ export class AuthService<TRequest, TResponse> {
     options: { code: string; state?: string },
   ) {
     const clientId = this.config.getValue('clientId');
+    const client = this.clientFactory(this.config.getConfig());
 
     // Authenticate with WorkOS using the OAuth code
-    const authResponse = await this.operations[
-      'client'
-    ].userManagement.authenticateWithCode({
+    const authResponse = await client.userManagement.authenticateWithCode({
       code: options.code,
       clientId,
     });
