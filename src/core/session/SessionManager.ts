@@ -90,6 +90,7 @@ export class SessionManager<TRequest, TResponse> {
           valid: true,
           session,
           claims,
+          wasRefreshed: false,
         };
       }
 
@@ -100,10 +101,13 @@ export class SessionManager<TRequest, TResponse> {
           valid: true,
           session: refreshResult.session,
           claims: refreshResult.claims,
+          wasRefreshed: true,
+          sessionData: refreshResult.sessionData,
         };
       } catch (refreshError) {
         return {
           valid: false,
+          wasRefreshed: false,
           error:
             refreshError instanceof Error
               ? refreshError
@@ -116,6 +120,7 @@ export class SessionManager<TRequest, TResponse> {
     } catch (decryptError) {
       return {
         valid: false,
+        wasRefreshed: false,
         error:
           decryptError instanceof Error
             ? decryptError
@@ -126,27 +131,33 @@ export class SessionManager<TRequest, TResponse> {
 
   async withAuth<TCustomClaims = CustomClaims>(
     request: TRequest,
-  ): Promise<AuthResult<TCustomClaims>> {
+  ): Promise<{
+    auth: AuthResult<TCustomClaims>;
+    refreshedSessionData?: string;
+  }> {
     const encryptedSession = await this.storage.getSession(request);
 
     if (!encryptedSession) {
-      return { user: null };
+      return { auth: { user: null } };
     }
 
-    const { valid, session, claims } =
+    const { valid, session, claims, wasRefreshed, sessionData } =
       await this.validateSession<TCustomClaims>(encryptedSession);
 
     if (!valid || !session || !claims) {
-      return { user: null };
+      return { auth: { user: null } };
     }
 
     return {
-      user: session.user,
-      sessionId: claims.sid,
-      impersonator: session.impersonator,
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken, // TODO should this be here?
-      claims,
+      auth: {
+        user: session.user,
+        sessionId: claims.sid,
+        impersonator: session.impersonator,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        claims,
+      },
+      refreshedSessionData: wasRefreshed ? sessionData : undefined,
     };
   }
 

@@ -98,7 +98,7 @@ describe('SessionManager', () => {
     it('returns null user when no session exists', async () => {
       const result = await sessionManager.withAuth('request');
 
-      expect(result.user).toBeNull();
+      expect(result.auth.user).toBeNull();
     });
 
     it('returns user data when valid session exists', async () => {
@@ -117,9 +117,9 @@ describe('SessionManager', () => {
 
       const result = await manager.withAuth('request');
 
-      expect(result.user).toEqual(mockUser);
-      expect(result.sessionId).toBe('session_123');
-      expect(result.accessToken).toBe('test-access-token');
+      expect(result.auth.user).toEqual(mockUser);
+      expect(result.auth.sessionId).toBe('session_123');
+      expect(result.auth.accessToken).toBe('test-access-token');
     });
   });
 
@@ -351,7 +351,7 @@ describe('SessionManager', () => {
 
       const result = await manager.withAuth('request');
 
-      expect(result.user).toBeNull();
+      expect(result.auth.user).toBeNull();
     });
   });
 });

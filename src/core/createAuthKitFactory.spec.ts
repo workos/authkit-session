@@ -87,7 +87,8 @@ describe('createAuthKitFactory', () => {
     describe('authentication methods', () => {
       it('provides withAuth method', async () => {
         const result = await authKit.withAuth('test-request');
-        expect(result).toHaveProperty('user');
+        expect(result).toHaveProperty('auth');
+        expect(result.auth).toHaveProperty('user');
       });
 
       it('provides getTokenClaims method', async () => {

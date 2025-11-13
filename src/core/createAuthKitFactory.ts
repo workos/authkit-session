@@ -98,12 +98,12 @@ export const createAuthKitFactory = once(function createAuthKit<
       options?: { returnTo?: string },
     ) => {
       // Get the current session
-      const authResult = await getSessionManager().withAuth(request);
+      const { auth } = await getSessionManager().withAuth(request);
 
       if (
-        !authResult.user ||
-        !authResult.accessToken ||
-        !authResult.refreshToken
+        !auth.user ||
+        !auth.accessToken ||
+        !auth.refreshToken
       ) {
         // No session to terminate, just clear cookies
         return sessionStorageFactory(getFullConfig()).clearSession(response);
@@ -111,10 +111,10 @@ export const createAuthKitFactory = once(function createAuthKit<
 
       // Create session object for termination
       const session = {
-        accessToken: authResult.accessToken,
-        refreshToken: authResult.refreshToken,
-        user: authResult.user,
-        impersonator: authResult.impersonator,
+        accessToken: auth.accessToken,
+        refreshToken: auth.refreshToken,
+        user: auth.user,
+        impersonator: auth.impersonator,
       };
 
       // Terminate the session (this clears cookies and returns logout URL)
@@ -179,7 +179,7 @@ export const createAuthKitFactory = once(function createAuthKit<
       const tokenToUse =
         accessToken ||
         (await getSessionManager().withAuth<TCustomClaims>(request))
-          .accessToken;
+          .auth.accessToken;
 
       if (!tokenToUse) {
         return {};
