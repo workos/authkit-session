@@ -202,17 +202,19 @@ export class AuthKitCore {
    * @returns Validation result with refreshed session if needed
    * @throws TokenRefreshError if refresh fails
    */
-  async validateAndRefresh(session: Session): Promise<{
+  async validateAndRefresh<TCustomClaims = CustomClaims>(
+    session: Session,
+  ): Promise<{
     valid: boolean;
     refreshed: boolean;
     session: Session;
-    claims: BaseTokenClaims;
+    claims: BaseTokenClaims & TCustomClaims;
   }> {
     const { accessToken } = session;
     const isValid = await this.verifyToken(accessToken);
     const isExpiring = this.isTokenExpiring(accessToken);
     if (isValid && !isExpiring) {
-      const claims = this.parseTokenClaims(accessToken);
+      const claims = this.parseTokenClaims<TCustomClaims>(accessToken);
       return { valid: true, refreshed: false, session, claims };
     }
 
@@ -228,7 +230,7 @@ export class AuthKitCore {
       session.refreshToken,
       organizationId,
     );
-    const newClaims = this.parseTokenClaims(newSession.accessToken);
+    const newClaims = this.parseTokenClaims<TCustomClaims>(newSession.accessToken);
     return {
       valid: true,
       refreshed: true,
