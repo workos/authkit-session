@@ -3,19 +3,36 @@
 > [!WARNING]
 > This is prerelease software. APIs may change without notice.
 
-A framework-agnostic authentication library for WorkOS with a modular adapter system for server-side rendered applications.
+**A toolkit library for building WorkOS AuthKit integrations.**
 
-This library serves as the foundation for framework-specific WorkOS authentication packages like `@workos-inc/authkit-nextjs`, `@workos-inc/authkit-remix`, and `@workos-inc/authkit-sveltekit`. By implementing the `SessionStorage` interface for your framework, you can provide WorkOS authentication capabilities with minimal framework-specific code.
+This library extracts the complex business logic (JWT verification, session encryption, token refresh orchestration) that WorkOS SDK authors need when building framework-specific authentication packages like `@workos-inc/authkit-nextjs`, `@workos-inc/authkit-tanstack-start`, and `@workos-inc/authkit-sveltekit`.
+
+## Philosophy
+
+**We provide the hard stuff:**
+- Token verification with JWKS and caching
+- Session encryption/decryption (iron-webcrypto)
+- Token refresh orchestration (when to refresh, how to preserve org context)
+- WorkOS API integration helpers (signOut, refreshSession, authorization URLs)
+- Cookie building with secure defaults
+- Configuration management (environment variables, validation)
+
+**You own the integration:**
+- Implement `updateSession/withAuth` patterns that fit your framework
+- Handle request context (headers, locals, WeakMap) your way
+- Add framework-specific features (callbacks, debug logging, eager auth)
+- Control middleware and route handler patterns
+
+**Result:** Share 80% of the complexity, keep 100% control over framework integration.
 
 ## Features
 
-- **Framework-agnostic core**: Common authentication logic that works across platforms
-- **Adapter pattern**: Simple interface for framework-specific implementations
-- **Session management**: Secure encrypted cookie-based authentication
-- **JWT handling**: Token validation, parsing, and refresh
-- **Organization switching**: Switch user context between organizations
-- **Type-safe API**: Full TypeScript support with custom claims
-- **Token claims parsing**: Extract and validate JWT claims
+- **Business Logic Extraction**: JWT, crypto, and refresh logic in one place
+- **Framework-Agnostic Primitives**: Works in any JavaScript environment (Node.js, edge, Deno)
+- **Toolkit, Not Framework**: Use what you need, implement patterns your way
+- **Type-Safe**: Full TypeScript support with custom claims and generics
+- **Production-Ready**: 80%+ test coverage, comprehensive error handling
+- **Zero Framework Opinions**: No prescribed middleware/route patterns
 
 ## Installation
 
