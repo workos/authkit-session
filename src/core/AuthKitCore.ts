@@ -1,17 +1,13 @@
-import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import type { Impersonator, User, WorkOS } from '@workos-inc/node';
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../utils.js';
 import type { ConfigurationProvider } from './config/ConfigurationProvider.js';
-import {
-  AuthKitError,
-  SessionEncryptionError,
-  TokenRefreshError,
-} from './errors.js';
-import type { SessionEncryption } from './session/types.js';
+import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 import type {
   BaseTokenClaims,
   CustomClaims,
   Session,
+  SessionEncryption,
 } from './session/types.js';
 
 /**
@@ -230,7 +226,9 @@ export class AuthKitCore {
       session.refreshToken,
       organizationId,
     );
-    const newClaims = this.parseTokenClaims<TCustomClaims>(newSession.accessToken);
+    const newClaims = this.parseTokenClaims<TCustomClaims>(
+      newSession.accessToken,
+    );
     return {
       valid: true,
       refreshed: true,
