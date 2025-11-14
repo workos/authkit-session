@@ -176,10 +176,14 @@ export const createAuthKitFactory = once(function createAuthKit<
       request: TRequest,
       accessToken?: string,
     ): Promise<Partial<BaseTokenClaims & TCustomClaims>> => {
-      const tokenToUse =
-        accessToken ||
-        (await getSessionManager().withAuth<TCustomClaims>(request))
-          .auth.accessToken;
+      let tokenToUse = accessToken;
+
+      if (!tokenToUse) {
+        const { auth } = await getSessionManager().withAuth<TCustomClaims>(request);
+        if (auth.user) {
+          tokenToUse = auth.accessToken;  // ← TypeScript knows this exists when user exists
+        }
+      }
 
       if (!tokenToUse) {
         return {};

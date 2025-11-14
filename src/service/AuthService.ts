@@ -108,6 +108,7 @@ export class AuthService<TRequest, TResponse> {
         await this.core.validateAndRefresh<TCustomClaims>(
           await this.core.decryptSession(encryptedSession),
         );
+
       const auth: AuthResult<TCustomClaims> = {
         refreshToken: session.refreshToken,
         user: session.user,
@@ -215,6 +216,14 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
+   * Get the WorkOS client instance.
+   * Useful for direct API calls not covered by AuthKit.
+   */
+  getWorkOS(): WorkOS {
+    return this.clientFactory(this.config.getConfig());
+  }
+
+  /**
    * Handle OAuth callback.
    * This creates a new session after successful authentication.
    *
@@ -246,7 +255,7 @@ export class AuthService<TRequest, TResponse> {
     };
 
     const encryptedSession = await this.core.encryptSession(session);
-    const updatedResponse = await this.saveSession(response, encryptedSession);
+    const { response: updatedResponse, headers } = await this.saveSession(response, encryptedSession);
 
     // Decode return pathname from state
     let returnPathname = '/';
@@ -261,6 +270,7 @@ export class AuthService<TRequest, TResponse> {
 
     return {
       response: updatedResponse,
+      headers,
       returnPathname,
       authResponse,
     };
