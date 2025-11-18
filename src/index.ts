@@ -69,11 +69,3 @@ export type {
 // ============================================
 export { AuthService } from './service/AuthService.js';
 export { createAuthService } from './service/factory.js';
-
-// ============================================
-// Legacy (Deprecated)
-// ============================================
-// These will be removed in the next major version.
-// Migrate to AuthKitCore + AuthOperations instead.
-export { SessionManager } from './core/session/SessionManager.js';
-export { createAuthKitFactory } from './core/createAuthKitFactory.js';

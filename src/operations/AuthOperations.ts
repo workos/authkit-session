@@ -87,8 +87,6 @@ export class AuthOperations {
    * Calls WorkOS to refresh tokens (optionally switching organizations),
    * encrypts the new session, and returns the auth result.
    *
-   * TODO(human): Implement this method
-   *
    * @param session - Current session with refresh token
    * @param organizationId - Optional organization ID to switch to during refresh
    * @returns Auth result and encrypted session data
