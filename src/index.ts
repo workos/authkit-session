@@ -10,33 +10,36 @@
  * - Provide integration helpers → Cookie building, config management
  * - Let frameworks own patterns → updateSession/withAuth are framework-specific
  *
- * **Core Toolkit (Recommended):**
+ * **Core Toolkit (Primitives):**
  * - AuthKitCore: Token verification, encryption, refresh orchestration
  * - AuthOperations: WorkOS API operations (signOut, refreshSession, URLs)
  * - CookieSessionStorage: Cookie building helpers
  * - ConfigurationProvider: Environment variable and config management
  *
- * **Optional Reference:**
- * - AuthService: Example orchestration pattern (frameworks can implement their own)
+ * **Orchestration (Your Choice):**
+ * - AuthService: One orchestration pattern (used by @workos/authkit-tanstack-start)
+ * - Or build your own orchestration using Core + Operations directly
  */
 
 // ============================================
-// TIER 1: Core Business Logic (Required)
+// Core Toolkit (Primitives)
 // ============================================
 export { AuthKitCore } from './core/AuthKitCore.js';
-
-// ============================================
-// TIER 2: WorkOS Operations (Recommended)
-// ============================================
 export { AuthOperations } from './operations/AuthOperations.js';
 
 // ============================================
-// TIER 3: Storage Helpers (Recommended)
+// Orchestration Pattern (Optional)
+// ============================================
+export { AuthService } from './service/AuthService.js';
+export { createAuthService } from './service/factory.js';
+
+// ============================================
+// Storage Helpers
 // ============================================
 export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
 
 // ============================================
-// TIER 4: Configuration (Utility)
+// Configuration
 // ============================================
 export {
   configure,
@@ -63,9 +66,3 @@ export type {
   WorkOS,
   AuthenticationResponse,
 } from '@workos-inc/node';
-
-// ============================================
-// Optional Reference Implementation
-// ============================================
-export { AuthService } from './service/AuthService.js';
-export { createAuthService } from './service/factory.js';

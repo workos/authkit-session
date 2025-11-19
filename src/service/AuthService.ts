@@ -14,35 +14,27 @@ import type {
 } from '../core/session/types.js';
 
 /**
- * AuthService is a REFERENCE IMPLEMENTATION for framework adapters.
+ * AuthService is one way to orchestrate the toolkit primitives.
  *
- * **IMPORTANT:** This class is optional. Framework adapters can use AuthKitCore,
- * AuthOperations, and CookieSessionStorage directly to implement their own patterns.
- *
- * This class provides a pattern for coordinating between:
+ * Coordinates between:
  * - AuthKitCore (pure business logic: crypto, JWT, refresh)
  * - AuthOperations (WorkOS API operations: signOut, refreshSession, URLs)
  * - SessionStorage<TRequest, TResponse> (framework-specific storage)
  *
- * **Why this is optional:**
- * - Frameworks have different middleware/route patterns (Next.js vs TanStack vs Remix)
- * - Request context handling differs by framework (headers vs locals vs WeakMap)
- * - Framework-specific features (callbacks, eagerAuth) don't fit generic patterns
+ * Provides common patterns:
+ * - `withAuth()` - Validate session with auto-refresh
+ * - `handleCallback()` - Process OAuth callback
+ * - `signOut()`, `getSignInUrl()`, etc. - Delegate to AuthOperations
  *
- * **Recommended usage:**
- * - Use AuthKitCore directly for crypto, token validation, and refresh logic
- * - Use AuthOperations for WorkOS API calls (refreshSession, signOut, URLs)
- * - Use CookieSessionStorage.buildSetCookie() for cookie string generation
- * - Implement your own updateSession/withAuth patterns that fit your framework
+ * **Used by:** @workos/authkit-tanstack-start
  *
- * **See also:**
- * - authkit-nextjs: Uses Core + Operations directly, implements Next.js patterns
- * - authkit-tanstack-start: Uses Core + Operations, implements TanStack patterns
+ * **Alternative approach:**
+ * Instantiate AuthKitCore and AuthOperations directly and build your own
+ * orchestration patterns. The toolkit doesn't prescribe how you orchestrate.
  *
- * **Lazy initialization:**
- * This class uses lazy initialization via private getters, which allows
- * configuration to be set AFTER instantiation but BEFORE first use.
- * This pattern may be useful for your framework adapter.
+ * **Implementation detail:**
+ * Uses lazy initialization via private getters, allowing configuration to be set
+ * after instantiation but before first use.
  */
 export class AuthService<TRequest, TResponse> {
   private _core?: AuthKitCore;

@@ -84,11 +84,15 @@ const { logoutUrl, clearCookieHeader } =
   await operations.signOut(sessionId, { returnTo: '/' });
 ```
 
-### Layer 3: Integration Helpers
+### Layer 3: Helpers
 
 - **`CookieSessionStorage`** - Base class with secure cookie defaults
 - **`ConfigurationProvider`** - Environment variable mapping and validation
-- **`AuthService`** - Optional reference implementation showing how to orchestrate Core + Operations + Storage
+
+### Orchestration (Your Choice)
+
+- **`AuthService`** - One orchestration pattern (used by `@workos/authkit-tanstack-start`)
+- **Build your own** - Use Core + Operations directly with custom orchestration
 
 **Key Design Decision:** We don't force context methods (`getSessionFromContext`) into interfaces. Each framework handles request context differently:
 - Next.js: Mutable headers (`request.headers.set()`)
@@ -300,9 +304,9 @@ const result = await authService.switchOrganization(session, 'org_123');
 
 If you're building a framework-specific package (like `@workos/authkit-tanstack-start`), this library provides all the business logic you need. You just add framework-specific glue.
 
-### Recommended Approach: Use AuthService
+### Option 1: Use AuthService
 
-The simplest path is to use `createAuthService()` with your storage adapter:
+One orchestration approach is `createAuthService()` with a storage adapter (used by `@workos/authkit-tanstack-start`):
 
 ```typescript
 // src/storage.ts - Your framework's storage adapter
@@ -413,9 +417,9 @@ export const authMiddleware = () => {
 
 **Why this matters:** If you don't apply the `Set-Cookie` header, refreshed tokens stay in memory but never persist to the cookie. This causes infinite refresh loops because the next request has the old (expired) token.
 
-### Alternative: Use Core + Operations Directly
+### Option 2: Use Core + Operations Directly
 
-For maximum flexibility, use the toolkit primitives directly:
+Build your own orchestration using the toolkit primitives:
 
 ```typescript
 import { AuthKitCore, AuthOperations, getWorkOS, getConfigurationProvider } from '@workos/authkit-session';
@@ -689,13 +693,16 @@ configure({
 
 #### Toolkit Classes
 
+**Core primitives:**
 - **`AuthKitCore`** - Pure business logic (JWT, crypto, refresh orchestration)
 - **`AuthOperations`** - WorkOS API operations (signOut, refreshSession, authorization URLs)
-- **`AuthService`** - Optional reference implementation orchestrating Core + Operations + Storage
 - **`CookieSessionStorage`** - Base class for cookie-based session storage
+
+**Orchestration (optional):**
+- **`AuthService`** - One orchestration pattern (used by `@workos/authkit-tanstack-start`)
 - **`createAuthService(options)`** - Factory for creating AuthService instances
 
-See the [Architecture](#architecture) section for detailed usage of each class.
+See the [Architecture](#architecture) section for detailed usage.
 
 ### AuthService Instance API
 
