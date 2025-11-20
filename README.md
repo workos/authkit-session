@@ -10,17 +10,20 @@ Provides the business logic for WorkOS authentication (JWT verification, session
 ## What This Library Provides
 
 **Authentication business logic:**
+
 - JWT verification against JWKS (with caching)
 - Session encryption/decryption (iron-webcrypto, AES-256-CBC)
 - Token refresh orchestration (automatic expiry detection, org context preservation)
 - WorkOS API operations (signOut, refreshSession, authorization URLs)
 
 **Framework integration helpers:**
+
 - `CookieSessionStorage` base class with secure defaults
 - Storage adapter pattern via `SessionStorage<TRequest, TResponse>` interface
 - Configuration management (environment variables, validation)
 
 **What frameworks implement:**
+
 - Storage adapter for their request/response objects
 - Middleware pattern for auth validation and token refresh
 - Request context handling (headers, locals, WeakMap - whatever fits)
@@ -51,7 +54,7 @@ The main interface frameworks interact with. Provides methods for:
 import { createAuthService } from '@workos/authkit-session';
 
 const authService = createAuthService({
-  sessionStorageFactory: (config) => new MyFrameworkStorage(config),
+  sessionStorageFactory: config => new MyFrameworkStorage(config),
 });
 
 const { auth, refreshedSessionData } = await authService.withAuth(request);
@@ -715,6 +718,7 @@ configure({
 - **`CookieSessionStorage`** - Base class for implementing storage adapters
 
 **Advanced (internal layers):**
+
 - **`AuthKitCore`** - Internal: JWT verification, session encryption, refresh logic
 - **`AuthOperations`** - Internal: WorkOS API operations
 
