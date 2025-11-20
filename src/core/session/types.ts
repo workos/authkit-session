@@ -13,14 +13,36 @@ export interface BaseTokenClaims extends JWTPayload {
 
 export type CustomClaims = Record<string, unknown>;
 
-export interface AuthResult<TCustomClaims = Record<string, unknown>> {
-  refreshToken?: string;
-  user?: User | null;
-  claims?: BaseTokenClaims & TCustomClaims;
-  impersonator?: Impersonator;
-  accessToken?: string;
-  sessionId?: string;
-}
+/**
+ * Authentication result - discriminated union based on user presence.
+ *
+ * TypeScript can narrow this type by checking if user is null:
+ *
+ * @example
+ * ```typescript
+ * const { auth } = await authService.withAuth(request);
+ *
+ * if (!auth.user) {
+ *   // auth is { user: null }
+ *   return redirect('/login');
+ * }
+ *
+ * // TypeScript knows: auth.user exists, so sessionId, accessToken, etc. also exist
+ * console.log(auth.sessionId);  // ← No ! needed, TypeScript knows it's string
+ * ```
+ */
+export type AuthResult<TCustomClaims = Record<string, unknown>> =
+  | {
+      user: null;
+    }
+  | {
+      user: User;
+      sessionId: string;
+      accessToken: string;
+      refreshToken: string;
+      claims: BaseTokenClaims & TCustomClaims;
+      impersonator?: Impersonator;
+    };
 
 /**
  * AuthKit Session
