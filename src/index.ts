@@ -1,37 +1,40 @@
 /**
  * @workos/authkit-session
  *
- * A toolkit library for building WorkOS AuthKit integrations.
- * Provides business logic primitives (crypto, JWT, refresh) that framework
- * adapters use to implement authentication patterns.
+ * Framework-agnostic authentication library for WorkOS.
  *
- * **Philosophy:**
- * - Extract complex business logic → Shared across frameworks
- * - Provide integration helpers → Cookie building, config management
- * - Let frameworks own patterns → updateSession/withAuth are framework-specific
+ * Provides authentication business logic (JWT verification, session encryption,
+ * token refresh) with a pluggable storage adapter pattern for framework integration.
  *
- * **Core Toolkit (Primitives):**
- * - AuthKitCore: Token verification, encryption, refresh orchestration
- * - AuthOperations: WorkOS API operations (signOut, refreshSession, URLs)
- * - CookieSessionStorage: Cookie building helpers
- * - ConfigurationProvider: Environment variable and config management
+ * **What frameworks do:**
+ * - Implement storage adapter (SessionStorage<TRequest, TResponse>)
+ * - Add middleware for auth validation and refresh
+ * - Export framework-specific helpers
  *
- * **Orchestration (Your Choice):**
- * - AuthService: One orchestration pattern (used by @workos/authkit-tanstack-start)
- * - Or build your own orchestration using Core + Operations directly
+ * **What this library does:**
+ * - All authentication logic (AuthService)
+ * - Session encryption (AES-256-CBC)
+ * - JWT verification (JWKS with caching)
+ * - Token refresh orchestration
+ * - WorkOS API operations
  */
 
 // ============================================
-// Core Toolkit (Primitives)
-// ============================================
-export { AuthKitCore } from './core/AuthKitCore.js';
-export { AuthOperations } from './operations/AuthOperations.js';
-
-// ============================================
-// Orchestration Pattern (Optional)
+// Public API
 // ============================================
 export { AuthService } from './service/AuthService.js';
 export { createAuthService } from './service/factory.js';
+
+// ============================================
+// Storage Adapter Pattern
+// ============================================
+export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
+
+// ============================================
+// Advanced (Internal Layers)
+// ============================================
+export { AuthKitCore } from './core/AuthKitCore.js';
+export { AuthOperations } from './operations/AuthOperations.js';
 
 // ============================================
 // Storage Helpers

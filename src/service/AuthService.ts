@@ -14,7 +14,7 @@ import type {
 } from '../core/session/types.js';
 
 /**
- * AuthService is one way to orchestrate the toolkit primitives.
+ * Orchestrate toolkit primitives.
  *
  * Coordinates between:
  * - AuthKitCore (pure business logic: crypto, JWT, refresh)
@@ -26,15 +26,7 @@ import type {
  * - `handleCallback()` - Process OAuth callback
  * - `signOut()`, `getSignInUrl()`, etc. - Delegate to AuthOperations
  *
- * **Used by:** @workos/authkit-tanstack-start
- *
- * **Alternative approach:**
- * Instantiate AuthKitCore and AuthOperations directly and build your own
- * orchestration patterns. The toolkit doesn't prescribe how you orchestrate.
- *
- * **Implementation detail:**
- * Uses lazy initialization via private getters, allowing configuration to be set
- * after instantiation but before first use.
+ * **Used by:** @workos/authkit-tanstack-react-start
  */
 export class AuthService<TRequest, TResponse> {
   private _core?: AuthKitCore;
