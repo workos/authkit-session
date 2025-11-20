@@ -10,6 +10,7 @@ This library extracts the complex business logic (JWT verification, session encr
 ## Philosophy
 
 **We provide the hard stuff:**
+
 - Token verification with JWKS and caching
 - Session encryption/decryption (iron-webcrypto)
 - Token refresh orchestration (when to refresh, how to preserve org context)
@@ -18,6 +19,7 @@ This library extracts the complex business logic (JWT verification, session encr
 - Configuration management (environment variables, validation)
 
 **You own the integration:**
+
 - Implement `updateSession/withAuth` patterns that fit your framework
 - Handle request context (headers, locals, WeakMap) your way
 - Add framework-specific features (callbacks, debug logging, eager auth)
@@ -80,8 +82,9 @@ import { AuthOperations } from '@workos/authkit-session';
 const operations = new AuthOperations(core, client, config);
 
 // Sign out returns everything you need
-const { logoutUrl, clearCookieHeader } =
-  await operations.signOut(sessionId, { returnTo: '/' });
+const { logoutUrl, clearCookieHeader } = await operations.signOut(sessionId, {
+  returnTo: '/',
+});
 ```
 
 ### Layer 3: Integration Helpers
@@ -91,6 +94,7 @@ const { logoutUrl, clearCookieHeader } =
 - **`AuthService`** - Optional reference implementation showing how to orchestrate Core + Operations + Storage
 
 **Key Design Decision:** We don't force context methods (`getSessionFromContext`) into interfaces. Each framework handles request context differently:
+
 - Next.js: Mutable headers (`request.headers.set()`)
 - TanStack Start: WeakMap (immutable requests)
 - SvelteKit: `event.locals`
@@ -142,7 +146,10 @@ configure({
 Extend `CookieSessionStorage` for your framework's request/response objects:
 
 ```typescript
-import { CookieSessionStorage, getConfigurationProvider } from '@workos/authkit-session';
+import {
+  CookieSessionStorage,
+  getConfigurationProvider,
+} from '@workos/authkit-session';
 
 // Web-standard Request/Response example
 class MyFrameworkStorage extends CookieSessionStorage<Request, Response> {
@@ -152,7 +159,7 @@ class MyFrameworkStorage extends CookieSessionStorage<Request, Response> {
 
     // Parse cookies
     const cookies = Object.fromEntries(
-      cookieHeader.split(';').map((cookie) => {
+      cookieHeader.split(';').map(cookie => {
         const [key, ...valueParts] = cookie.trim().split('=');
         return [key, valueParts.join('=')];
       }),
@@ -186,12 +193,14 @@ class MyFrameworkStorage extends CookieSessionStorage<Request, Response> {
 ```
 
 **Note:** `CookieSessionStorage` provides:
+
 - `this.cookieName` - Cookie name from config
 - `this.cookieOptions` - Secure defaults (HttpOnly, Secure, SameSite)
 - `buildSetCookie(value, expired?)` - Helper for Set-Cookie header strings
 - `saveSession()` / `clearSession()` - Implemented using `applyHeaders()` + `buildSetCookie()`
 
 You only need to implement:
+
 - `getSession(request)` - Extract encrypted session from cookies
 - `applyHeaders(response, headers)` - Apply headers to framework's response (optional, defaults to returning headers)
 
@@ -201,7 +210,7 @@ You only need to implement:
 import { createAuthService } from '@workos/authkit-session';
 
 const authService = createAuthService({
-  sessionStorageFactory: (config) => new MyFrameworkStorage(config),
+  sessionStorageFactory: config => new MyFrameworkStorage(config),
 });
 ```
 
@@ -218,8 +227,8 @@ if (!auth.user) {
 }
 
 // TypeScript knows: auth.user exists, so sessionId, accessToken, etc. exist too
-console.log(auth.sessionId);     // string (no ! needed)
-console.log(auth.accessToken);   // string
+console.log(auth.sessionId); // string (no ! needed)
+console.log(auth.accessToken); // string
 console.log(auth.claims.org_id); // string | undefined
 ```
 
@@ -227,7 +236,10 @@ console.log(auth.claims.org_id); // string | undefined
 
 ```typescript
 if (refreshedSessionData) {
-  const { headers } = await authService.saveSession(undefined, refreshedSessionData);
+  const { headers } = await authService.saveSession(
+    undefined,
+    refreshedSessionData,
+  );
   // Apply headers['Set-Cookie'] to your framework's response
   response.headers.set('Set-Cookie', headers['Set-Cookie']);
 }
@@ -261,11 +273,10 @@ const authUrl = await authService.getAuthorizationUrl({
 const code = url.searchParams.get('code');
 const state = url.searchParams.get('state');
 
-const result = await authService.handleCallback(
-  request,
-  response,
-  { code, state },
-);
+const result = await authService.handleCallback(request, response, {
+  code,
+  state,
+});
 
 // result.returnPathname - Where to redirect after auth
 // result.authResponse - Full auth response with user, tokens, etc.
@@ -308,14 +319,19 @@ The simplest path is to use `createAuthService()` with your storage adapter:
 // src/storage.ts - Your framework's storage adapter
 import { CookieSessionStorage } from '@workos/authkit-session';
 
-export class MyFrameworkStorage extends CookieSessionStorage<Request, Response> {
+export class MyFrameworkStorage extends CookieSessionStorage<
+  Request,
+  Response
+> {
   async getSession(request: Request): Promise<string | null> {
     // Extract cookie from request
     const cookieHeader = request.headers.get('cookie');
     if (!cookieHeader) return null;
 
     const cookies = this.parseCookies(cookieHeader);
-    return cookies[this.cookieName] ? decodeURIComponent(cookies[this.cookieName]) : null;
+    return cookies[this.cookieName]
+      ? decodeURIComponent(cookies[this.cookieName])
+      : null;
   }
 
   protected async applyHeaders(
@@ -340,7 +356,7 @@ export class MyFrameworkStorage extends CookieSessionStorage<Request, Response> 
 
   private parseCookies(header: string): Record<string, string> {
     return Object.fromEntries(
-      header.split(';').map((c) => {
+      header.split(';').map(c => {
         const [key, ...parts] = c.trim().split('=');
         return [key, parts.join('=')];
       }),
@@ -349,11 +365,15 @@ export class MyFrameworkStorage extends CookieSessionStorage<Request, Response> 
 }
 
 // src/index.ts - Create auth instance
-import { createAuthService, getConfigurationProvider } from '@workos/authkit-session';
+import {
+  createAuthService,
+  getConfigurationProvider,
+} from '@workos/authkit-session';
 import { MyFrameworkStorage } from './storage.js';
 
 const authService = createAuthService({
-  sessionStorageFactory: (config) => new MyFrameworkStorage(getConfigurationProvider()),
+  sessionStorageFactory: config =>
+    new MyFrameworkStorage(getConfigurationProvider()),
 });
 
 // Export framework-specific wrappers
@@ -373,6 +393,7 @@ export async function signOut(sessionId: string, returnTo?: string) {
 ### Middleware Pattern (Critical for Token Refresh)
 
 Your middleware should:
+
 1. Validate current session (auto-refreshes if expiring)
 2. Store auth in framework context for downstream handlers
 3. Apply `Set-Cookie` header if session was refreshed
@@ -380,9 +401,11 @@ Your middleware should:
 ```typescript
 // Example: TanStack Start-style middleware
 export const authMiddleware = () => {
-  return createMiddleware().server(async (args) => {
+  return createMiddleware().server(async args => {
     // Validate and potentially refresh session
-    const { auth, refreshedSessionData } = await authService.withAuth(args.request);
+    const { auth, refreshedSessionData } = await authService.withAuth(
+      args.request,
+    );
 
     // Pass auth to downstream via framework context
     const result = await args.next({
@@ -391,7 +414,10 @@ export const authMiddleware = () => {
 
     // CRITICAL: Apply Set-Cookie if session was refreshed
     if (refreshedSessionData) {
-      const { headers } = await authService.saveSession(undefined, refreshedSessionData);
+      const { headers } = await authService.saveSession(
+        undefined,
+        refreshedSessionData,
+      );
 
       if (headers?.['Set-Cookie']) {
         // Clone immutable Response and add Set-Cookie header
@@ -418,7 +444,12 @@ export const authMiddleware = () => {
 For maximum flexibility, use the toolkit primitives directly:
 
 ```typescript
-import { AuthKitCore, AuthOperations, getWorkOS, getConfigurationProvider } from '@workos/authkit-session';
+import {
+  AuthKitCore,
+  AuthOperations,
+  getWorkOS,
+  getConfigurationProvider,
+} from '@workos/authkit-session';
 
 const config = getConfigurationProvider();
 const client = getWorkOS(config.getConfig());
@@ -433,8 +464,12 @@ async function middleware(request: Request) {
   }
 
   const session = await core.decryptSession(encrypted);
-  const { valid, refreshed, session: validated, claims } =
-    await core.validateAndRefresh(session);
+  const {
+    valid,
+    refreshed,
+    session: validated,
+    claims,
+  } = await core.validateAndRefresh(session);
 
   if (!valid) {
     return { auth: { user: null } };
@@ -471,6 +506,7 @@ async function middleware(request: Request) {
 ### Reference Implementation
 
 See `@workos/authkit-tanstack-start` for a complete example:
+
 - Storage adapter with `applyHeaders()` override
 - Middleware with proper Set-Cookie handling
 - Server functions delegating to AuthOperations
@@ -812,21 +848,21 @@ type AuthResult<TCustomClaims = Record<string, unknown>> =
       user: null; // Not authenticated
     }
   | {
-      user: User;                               // Authenticated user
-      sessionId: string;                         // Session ID from JWT claims
-      accessToken: string;                       // JWT access token
-      refreshToken: string;                      // Refresh token
-      claims: BaseTokenClaims & TCustomClaims;  // Full JWT claims
-      impersonator?: Impersonator;              // Present if impersonating
+      user: User; // Authenticated user
+      sessionId: string; // Session ID from JWT claims
+      accessToken: string; // JWT access token
+      refreshToken: string; // Refresh token
+      claims: BaseTokenClaims & TCustomClaims; // Full JWT claims
+      impersonator?: Impersonator; // Present if impersonating
     };
 
 interface BaseTokenClaims {
-  sid: string;              // Session ID
-  org_id?: string;          // Organization ID
-  role?: string;            // User role
-  roles?: string[];         // User roles (array)
-  permissions?: string[];   // User permissions
-  entitlements?: string[];  // User entitlements
+  sid: string; // Session ID
+  org_id?: string; // Organization ID
+  role?: string; // User role
+  roles?: string[]; // User roles (array)
+  permissions?: string[]; // User permissions
+  entitlements?: string[]; // User entitlements
   feature_flags?: string[]; // Feature flags
 }
 ```
@@ -847,10 +883,10 @@ if (!auth.user) {
 }
 
 // TypeScript knows: auth.user exists, so ALL required properties exist
-console.log(auth.sessionId);     // ✅ string (no ! needed)
-console.log(auth.accessToken);   // ✅ string
-console.log(auth.refreshToken);  // ✅ string
-console.log(auth.claims.sid);    // ✅ string
+console.log(auth.sessionId); // ✅ string (no ! needed)
+console.log(auth.accessToken); // ✅ string
+console.log(auth.refreshToken); // ✅ string
+console.log(auth.claims.sid); // ✅ string
 console.log(auth.claims.org_id); // ✅ string | undefined (optional claim)
 
 // This would be a TypeScript error in the !auth.user branch:
@@ -858,6 +894,7 @@ console.log(auth.claims.org_id); // ✅ string | undefined (optional claim)
 ```
 
 **Benefits:**
+
 - No more optional chaining (`auth.user?.id`)
 - No more null assertions (`auth.sessionId!`)
 - Impossible to access properties that don't exist
@@ -870,19 +907,19 @@ The library also exports these components for advanced use cases:
 ```typescript
 import {
   // Core toolkit
-  AuthKitCore,              // Pure business logic (JWT, crypto, refresh)
-  AuthOperations,           // WorkOS API operations
-  CookieSessionStorage,     // Base class for cookie storage
+  AuthKitCore, // Pure business logic (JWT, crypto, refresh)
+  AuthOperations, // WorkOS API operations
+  CookieSessionStorage, // Base class for cookie storage
 
   // Configuration
-  configure,                // Set up configuration
-  validateConfig,           // Validate required config values
-  getConfig,                // Get specific config value
+  configure, // Set up configuration
+  validateConfig, // Validate required config values
+  getConfig, // Get specific config value
   getConfigurationProvider, // Get ConfigurationProvider instance
-  ConfigurationProvider,    // ConfigurationProvider class
+  ConfigurationProvider, // ConfigurationProvider class
 
   // WorkOS client
-  getWorkOS,                // WorkOS client factory
+  getWorkOS, // WorkOS client factory
 
   // Types
   type SessionStorage,
