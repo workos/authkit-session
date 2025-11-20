@@ -161,7 +161,8 @@ describe('AuthOperations', () => {
 
       const coreWithSpy = {
         refreshTokens: async (_token: string, orgId?: string) => ({
-          accessToken: orgId === 'org_from_token' ? 'extracted-org-token' : 'no-org-token',
+          accessToken:
+            orgId === 'org_from_token' ? 'extracted-org-token' : 'no-org-token',
           refreshToken: 'new-refresh-token',
           user: mockUser,
           impersonator: undefined,

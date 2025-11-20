@@ -205,11 +205,9 @@ describe('AuthService', () => {
 
   describe('handleCallback()', () => {
     it('authenticates and creates session', async () => {
-      const result = await service.handleCallback(
-        'request',
-        'response',
-        { code: 'auth-code-123' },
-      );
+      const result = await service.handleCallback('request', 'response', {
+        code: 'auth-code-123',
+      });
 
       expect(result.authResponse.accessToken).toBe('access-auth-code-123');
       expect(result.returnPathname).toBe('/');
@@ -219,21 +217,19 @@ describe('AuthService', () => {
     it('decodes returnPathname from state', async () => {
       const state = btoa(JSON.stringify({ returnPathname: '/dashboard' }));
 
-      const result = await service.handleCallback(
-        'request',
-        'response',
-        { code: 'auth-code-123', state },
-      );
+      const result = await service.handleCallback('request', 'response', {
+        code: 'auth-code-123',
+        state,
+      });
 
       expect(result.returnPathname).toBe('/dashboard');
     });
 
     it('uses default returnPathname for invalid state', async () => {
-      const result = await service.handleCallback(
-        'request',
-        'response',
-        { code: 'auth-code-123', state: 'invalid-state' },
-      );
+      const result = await service.handleCallback('request', 'response', {
+        code: 'auth-code-123',
+        state: 'invalid-state',
+      });
 
       expect(result.returnPathname).toBe('/');
     });

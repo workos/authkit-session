@@ -42,7 +42,9 @@ export class AuthService<TRequest, TResponse> {
   private readonly storage: SessionStorage<TRequest, TResponse>;
   private readonly config: ConfigurationProvider;
   private readonly clientFactory: (config: AuthKitConfig) => WorkOS;
-  private readonly encryptionFactory: (config: AuthKitConfig) => SessionEncryption;
+  private readonly encryptionFactory: (
+    config: AuthKitConfig,
+  ) => SessionEncryption;
 
   constructor(
     config: ConfigurationProvider,
@@ -262,7 +264,10 @@ export class AuthService<TRequest, TResponse> {
     };
 
     const encryptedSession = await this.core.encryptSession(session);
-    const { response: updatedResponse, headers } = await this.saveSession(response, encryptedSession);
+    const { response: updatedResponse, headers } = await this.saveSession(
+      response,
+      encryptedSession,
+    );
 
     // Decode return pathname from state
     let returnPathname = '/';

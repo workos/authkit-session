@@ -1,8 +1,5 @@
 import { AuthKitCore } from './AuthKitCore.js';
-import {
-  SessionEncryptionError,
-  TokenRefreshError,
-} from './errors.js';
+import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 
 const mockConfig = {
   getValue: (key: string) => {
@@ -207,9 +204,9 @@ describe('AuthKitCore', () => {
         failingEncryption as any,
       );
 
-      await expect(
-        failingCore.decryptSession('bad-data'),
-      ).rejects.toThrow(SessionEncryptionError);
+      await expect(failingCore.decryptSession('bad-data')).rejects.toThrow(
+        SessionEncryptionError,
+      );
     });
   });
 
@@ -260,10 +257,9 @@ describe('AuthKitCore', () => {
         mockEncryption as any,
       );
 
-      await expect(
-        failingCore.refreshTokens('bad-token'),
-      ).rejects.toThrow(TokenRefreshError);
+      await expect(failingCore.refreshTokens('bad-token')).rejects.toThrow(
+        TokenRefreshError,
+      );
     });
   });
-
 });

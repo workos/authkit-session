@@ -4,7 +4,10 @@ import { getConfigurationProvider, getFullConfig } from '../core/config.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getWorkOS } from '../core/client/workos.js';
 import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
-import type { SessionEncryption, SessionStorage } from '../core/session/types.js';
+import type {
+  SessionEncryption,
+  SessionStorage,
+} from '../core/session/types.js';
 import { AuthService } from './AuthService.js';
 
 /**

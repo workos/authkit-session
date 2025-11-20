@@ -66,7 +66,8 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     if (o.httpOnly) a.push('HttpOnly');
     if (o.secure) a.push('Secure');
     if (o.sameSite) {
-      const capitalizedSameSite = o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
+      const capitalizedSameSite =
+        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
       a.push(`SameSite=${capitalizedSameSite}`);
     }
     if (o.priority) a.push(`Priority=${o.priority}`);
