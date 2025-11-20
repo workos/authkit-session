@@ -26,11 +26,6 @@ export { AuthService } from './service/AuthService.js';
 export { createAuthService } from './service/factory.js';
 
 // ============================================
-// Storage Adapter Pattern
-// ============================================
-export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
-
-// ============================================
 // Advanced (Internal Layers)
 // ============================================
 export { AuthKitCore } from './core/AuthKitCore.js';
