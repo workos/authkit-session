@@ -69,7 +69,7 @@ export class AuthKitCore {
    * Check if a token is expiring soon.
    *
    * @param token - The JWT access token
-   * @param bufferSeconds - How many seconds before expiry to consider "expiring" (default: 60)
+   * @param buffer - How many seconds before expiry to consider "expiring" (default: 60)
    * @returns true if token expires within buffer period
    */
   isTokenExpiring(token: string, buffer: number = 60): boolean {
