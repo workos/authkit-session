@@ -714,7 +714,7 @@ configure({
 
 ## API Reference
 
-### Toolkit API (Recommended)
+### Public API (Recommended)
 
 #### Core Configuration
 
@@ -723,7 +723,7 @@ configure({
 - `getConfig(key)`: Get a specific configuration value
 - `getConfigurationProvider()`: Get the ConfigurationProvider instance
 
-#### Toolkit Classes
+#### Public Classes
 
 - **`AuthKitCore`** - Pure business logic (JWT, crypto, refresh orchestration)
 - **`AuthOperations`** - WorkOS API operations (signOut, refreshSession, authorization URLs)
@@ -906,7 +906,7 @@ The library also exports these components for advanced use cases:
 
 ```typescript
 import {
-  // Core toolkit
+  // Core business logic
   AuthKitCore, // Pure business logic (JWT, crypto, refresh)
   AuthOperations, // WorkOS API operations
   CookieSessionStorage, // Base class for cookie storage

@@ -14,7 +14,7 @@ import type {
 } from '../core/session/types.js';
 
 /**
- * Orchestrate toolkit primitives.
+ * Framework-agnostic authentication service.
  *
  * Coordinates between:
  * - AuthKitCore (pure business logic: crypto, JWT, refresh)

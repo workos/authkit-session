@@ -219,7 +219,9 @@ export class AuthKitCore {
       try {
         const oldClaims = this.parseTokenClaims(accessToken);
         organizationId = oldClaims.org_id;
-      } catch {}
+      } catch {
+        // Token parsing failed - refresh without org context
+      }
     }
 
     const newSession = await this.refreshTokens(
