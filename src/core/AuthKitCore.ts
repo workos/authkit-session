@@ -72,7 +72,7 @@ export class AuthKitCore {
    * @param buffer - How many seconds before expiry to consider "expiring" (default: 60)
    * @returns true if token expires within buffer period
    */
-  isTokenExpiring(token: string, buffer: number = 60): boolean {
+  isTokenExpiring(token: string, buffer: number = 10): boolean {
     const expiryTime = this.getTokenExpiryTime(token);
     if (!expiryTime) {
       return false;
