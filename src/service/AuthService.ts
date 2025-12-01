@@ -1,6 +1,5 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
-import type { ConfigurationProvider } from '../core/config/ConfigurationProvider.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
@@ -29,59 +28,23 @@ import type {
  * **Used by:** @workos/authkit-tanstack-react-start
  */
 export class AuthService<TRequest, TResponse> {
-  private _core?: AuthKitCore;
-  private _operations?: AuthOperations;
+  private readonly core: AuthKitCore;
+  private readonly operations: AuthOperations;
   private readonly storage: SessionStorage<TRequest, TResponse>;
-  private readonly config: ConfigurationProvider;
-  private readonly clientFactory: (config: AuthKitConfig) => WorkOS;
-  private readonly encryptionFactory: (
-    config: AuthKitConfig,
-  ) => SessionEncryption;
+  private readonly config: AuthKitConfig;
+  private readonly client: WorkOS;
 
   constructor(
-    config: ConfigurationProvider,
+    config: AuthKitConfig,
     storage: SessionStorage<TRequest, TResponse>,
-    clientFactory: (config: AuthKitConfig) => WorkOS,
-    encryptionFactory: (config: AuthKitConfig) => SessionEncryption,
+    client: WorkOS,
+    encryption: SessionEncryption,
   ) {
     this.config = config;
     this.storage = storage;
-    this.clientFactory = clientFactory;
-    this.encryptionFactory = encryptionFactory;
-    // NOTE: core and operations are NOT instantiated here
-    // They're created lazily on first access via getters below
-  }
-
-  /**
-   * Lazy getter for AuthKitCore.
-   * Instantiates on first access, allowing config to be set beforehand.
-   */
-  private get core(): AuthKitCore {
-    if (!this._core) {
-      const resolvedConfig = this.config.getConfig();
-      this._core = new AuthKitCore(
-        resolvedConfig,
-        this.clientFactory(resolvedConfig),
-        this.encryptionFactory(resolvedConfig),
-      );
-    }
-    return this._core;
-  }
-
-  /**
-   * Lazy getter for AuthOperations.
-   * Instantiates on first access, allowing config to be set beforehand.
-   */
-  private get operations(): AuthOperations {
-    if (!this._operations) {
-      const resolvedConfig = this.config.getConfig();
-      this._operations = new AuthOperations(
-        this.core,
-        this.clientFactory(resolvedConfig),
-        resolvedConfig,
-      );
-    }
-    return this._operations;
+    this.client = client;
+    this.core = new AuthKitCore(config, client, encryption);
+    this.operations = new AuthOperations(this.core, client, config);
   }
 
   /**
@@ -223,7 +186,7 @@ export class AuthService<TRequest, TResponse> {
    * Useful for direct API calls not covered by AuthKit.
    */
   getWorkOS(): WorkOS {
-    return this.clientFactory(this.config.getConfig());
+    return this.client;
   }
 
   /**
@@ -240,13 +203,10 @@ export class AuthService<TRequest, TResponse> {
     response: TResponse,
     options: { code: string; state?: string },
   ) {
-    const clientId = this.config.getValue('clientId');
-    const client = this.clientFactory(this.config.getConfig());
-
     // Authenticate with WorkOS using the OAuth code
-    const authResponse = await client.userManagement.authenticateWithCode({
+    const authResponse = await this.client.userManagement.authenticateWithCode({
       code: options.code,
-      clientId,
+      clientId: this.config.clientId,
     });
 
     // Create and save the new session

@@ -1,6 +1,6 @@
 import type { WorkOS } from '@workos-inc/node';
 import { once } from '../utils.js';
-import { getConfigurationProvider, getFullConfig } from '../core/config.js';
+import { getFullConfig } from '../core/config.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getWorkOS } from '../core/client/workos.js';
 import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
@@ -50,23 +50,33 @@ export function createAuthService<TRequest, TResponse>(options: {
     encryptionFactory = () => sessionEncryption,
   } = options;
 
-  // Storage needs to be created with lazy config evaluation
-  // We create a wrapper storage that delegates to the real storage lazily
-  const getStorage = once(() => sessionStorageFactory(getFullConfig()));
+  // Lazily create the real AuthService with resolved config
+  const getService = once(() => {
+    const config = getFullConfig();
+    const storage = sessionStorageFactory(config);
+    const client = clientFactory(config);
+    const encryption = encryptionFactory(config);
+    return new AuthService(config, storage, client, encryption);
+  });
 
-  // Create a proxy storage that lazily instantiates the real storage
-  const lazyStorage: SessionStorage<TRequest, TResponse> = {
-    getSession: async (request: TRequest) => getStorage().getSession(request),
-    saveSession: async (response: TResponse | undefined, sessionData: string) =>
-      getStorage().saveSession(response, sessionData),
-    clearSession: async (response: TResponse) =>
-      getStorage().clearSession(response),
-  };
-
-  return new AuthService<TRequest, TResponse>(
-    getConfigurationProvider(),
-    lazyStorage,
-    clientFactory,
-    encryptionFactory,
-  );
+  // Return proxy that lazily delegates to the real service
+  // This allows configure() to be called after createAuthService() but before first use
+  return {
+    withAuth: request => getService().withAuth(request),
+    getSession: request => getService().getSession(request),
+    saveSession: (response, sessionData) =>
+      getService().saveSession(response, sessionData),
+    clearSession: response => getService().clearSession(response),
+    signOut: (sessionId, opts) => getService().signOut(sessionId, opts),
+    switchOrganization: (session, organizationId) =>
+      getService().switchOrganization(session, organizationId),
+    refreshSession: (session, organizationId) =>
+      getService().refreshSession(session, organizationId),
+    getAuthorizationUrl: opts => getService().getAuthorizationUrl(opts),
+    getSignInUrl: opts => getService().getSignInUrl(opts),
+    getSignUpUrl: opts => getService().getSignUpUrl(opts),
+    getWorkOS: () => getService().getWorkOS(),
+    handleCallback: (request, response, opts) =>
+      getService().handleCallback(request, response, opts),
+  } as AuthService<TRequest, TResponse>;
 }

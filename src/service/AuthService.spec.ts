@@ -1,19 +1,11 @@
 import { AuthService } from './AuthService.js';
 
 const mockConfig = {
-  getValue: (key: string) => {
-    const values = {
-      clientId: 'test-client-id',
-      cookiePassword: 'test-password-that-is-32-chars-long!!',
-    };
-    return values[key as keyof typeof values];
-  },
-  getConfig: () => ({
-    clientId: 'test-client-id',
-    apiKey: 'test-api-key',
-    redirectUri: 'http://localhost:3000/callback',
-    cookiePassword: 'test-password-that-is-32-chars-long!!',
-  }),
+  clientId: 'test-client-id',
+  apiKey: 'test-api-key',
+  redirectUri: 'http://localhost:3000/callback',
+  cookiePassword: 'test-password-that-is-32-chars-long!!',
+  cookieName: 'wos-session',
 };
 
 const mockUser = {
@@ -70,8 +62,8 @@ describe('AuthService', () => {
     service = new AuthService(
       mockConfig as any,
       mockStorage as any,
-      () => mockClient as any,
-      () => mockEncryption as any,
+      mockClient as any,
+      mockEncryption as any,
     );
   });
 
@@ -90,8 +82,8 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
-        () => mockClient as any,
-        () => mockEncryption as any,
+        mockClient as any,
+        mockEncryption as any,
       );
 
       const result = await testService.withAuth('request');
@@ -110,8 +102,8 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         mockStorage as any,
-        () => mockClient as any,
-        () => failingEncryption as any,
+        mockClient as any,
+        failingEncryption as any,
       );
 
       const result = await testService.withAuth('request');
@@ -136,8 +128,8 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
-        () => mockClient as any,
-        () => mockEncryption as any,
+        mockClient as any,
+        mockEncryption as any,
       );
 
       const result = await testService.getSession('request');

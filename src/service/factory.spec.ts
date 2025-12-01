@@ -1,5 +1,4 @@
 import { createAuthService } from './factory.js';
-import { AuthService } from './AuthService.js';
 
 const mockConfig = {
   clientId: 'test-client-id',
@@ -30,15 +29,25 @@ describe('createAuthService', () => {
   });
 
   describe('factory creation', () => {
-    it('creates AuthService instance', () => {
+    it('creates AuthService-compatible interface', () => {
       const service = createAuthService({
         sessionStorageFactory: () => mockStorage as any,
       });
 
-      expect(service).toBeInstanceOf(AuthService);
+      // Verify the proxy has all expected methods
+      expect(typeof service.withAuth).toBe('function');
+      expect(typeof service.getSession).toBe('function');
+      expect(typeof service.saveSession).toBe('function');
+      expect(typeof service.clearSession).toBe('function');
+      expect(typeof service.signOut).toBe('function');
+      expect(typeof service.getAuthorizationUrl).toBe('function');
+      expect(typeof service.getSignInUrl).toBe('function');
+      expect(typeof service.getSignUpUrl).toBe('function');
+      expect(typeof service.getWorkOS).toBe('function');
+      expect(typeof service.handleCallback).toBe('function');
     });
 
-    it('accepts custom client factory', () => {
+    it('accepts custom client factory', async () => {
       const customClient = {
         userManagement: {
           getJwksUrl: () => 'https://custom.example.com/jwks',
@@ -50,7 +59,6 @@ describe('createAuthService', () => {
         clientFactory: () => customClient as any,
       });
 
-      expect(service).toBeInstanceOf(AuthService);
       expect(service.getWorkOS()).toBe(customClient);
     });
 
@@ -65,12 +73,13 @@ describe('createAuthService', () => {
         encryptionFactory: () => customEncryption as any,
       });
 
-      expect(service).toBeInstanceOf(AuthService);
+      // Factory accepts the custom encryption - verify by checking the interface exists
+      expect(typeof service.withAuth).toBe('function');
     });
   });
 
-  describe('lazy storage initialization', () => {
-    it('defers storage creation until first use', async () => {
+  describe('lazy initialization', () => {
+    it('defers service creation until first use', async () => {
       let storageCreated = false;
       const storageFactory = () => {
         storageCreated = true;
@@ -81,14 +90,16 @@ describe('createAuthService', () => {
         sessionStorageFactory: storageFactory,
       });
 
+      // Service created, but underlying AuthService not yet instantiated
       expect(storageCreated).toBe(false);
 
+      // First use triggers lazy init
       await service.getSession('request');
 
       expect(storageCreated).toBe(true);
     });
 
-    it('creates storage only once', async () => {
+    it('creates service only once', async () => {
       let creationCount = 0;
       const storageFactory = () => {
         creationCount++;
