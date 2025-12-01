@@ -1,6 +1,6 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitCore } from '../core/AuthKitCore.js';
-import type { ConfigurationProvider } from '../core/config/ConfigurationProvider.js';
+import type { AuthKitConfig } from '../core/config/types.js';
 import type {
   AuthResult,
   BaseTokenClaims,
@@ -23,13 +23,9 @@ import type {
 export class AuthOperations {
   private core: AuthKitCore;
   private client: WorkOS;
-  private config: ConfigurationProvider;
+  private config: AuthKitConfig;
 
-  constructor(
-    core: AuthKitCore,
-    client: WorkOS,
-    config: ConfigurationProvider,
-  ) {
+  constructor(core: AuthKitCore, client: WorkOS, config: AuthKitConfig) {
     this.core = core;
     this.client = client;
     this.config = config;
@@ -59,7 +55,7 @@ export class AuthOperations {
     });
 
     // Build cookie clear header
-    const cookieName = this.config.getValue('cookieName');
+    const cookieName = this.config.cookieName ?? 'wos-session';
     const clearCookieHeader = `${cookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=lax`;
 
     return {
@@ -162,12 +158,12 @@ export class AuthOperations {
   ): Promise<string> {
     return this.client.userManagement.getAuthorizationUrl({
       provider: 'authkit',
-      redirectUri: options.redirectUri ?? this.config.getValue('redirectUri'),
+      redirectUri: options.redirectUri ?? this.config.redirectUri,
       screenHint: options.screenHint,
       organizationId: options.organizationId,
       loginHint: options.loginHint,
       prompt: options.prompt,
-      clientId: this.config.getValue('clientId'),
+      clientId: this.config.clientId,
       state: options.returnPathname
         ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
         : undefined,

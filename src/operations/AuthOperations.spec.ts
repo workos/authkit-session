@@ -1,14 +1,9 @@
 import { AuthOperations } from './AuthOperations.js';
 
 const mockConfig = {
-  getValue: (key: string) => {
-    const values = {
-      clientId: 'test-client-id',
-      redirectUri: 'http://localhost:3000/callback',
-      cookieName: 'wos-session',
-    };
-    return values[key as keyof typeof values];
-  },
+  clientId: 'test-client-id',
+  redirectUri: 'http://localhost:3000/callback',
+  cookieName: 'wos-session',
 };
 
 const mockUser = {
@@ -22,6 +17,7 @@ const mockUser = {
   createdAt: '2023-01-01T00:00:00Z',
   updatedAt: '2023-01-01T00:00:00Z',
   lastSignInAt: '2023-01-01T00:00:00Z',
+  locale: 'en-US',
   externalId: null,
   metadata: {},
 } as const;

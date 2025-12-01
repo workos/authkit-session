@@ -1,7 +1,7 @@
 import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../utils.js';
-import type { ConfigurationProvider } from './config/ConfigurationProvider.js';
+import type { AuthKitConfig } from './config/types.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 import type {
   BaseTokenClaims,
@@ -25,20 +25,16 @@ import type {
  * - Session validation orchestration
  */
 export class AuthKitCore {
-  private config: ConfigurationProvider;
+  private config: AuthKitConfig;
   private client: WorkOS;
   private encryption: SessionEncryption;
   private clientId: string;
 
-  constructor(
-    config: ConfigurationProvider,
-    client: WorkOS,
-    encryption: SessionEncryption,
-  ) {
+  constructor(config: AuthKitConfig, client: WorkOS, encryption: SessionEncryption) {
     this.config = config;
     this.client = client;
     this.encryption = encryption;
-    this.clientId = config.getValue('clientId');
+    this.clientId = config.clientId;
   }
 
   /**
@@ -119,9 +115,8 @@ export class AuthKitCore {
    */
   async encryptSession(session: Session): Promise<string> {
     try {
-      const password = this.config.getValue('cookiePassword');
       const encryptedSession = await this.encryption.sealData(session, {
-        password,
+        password: this.config.cookiePassword,
         ttl: 0,
       });
       return encryptedSession;
@@ -139,10 +134,9 @@ export class AuthKitCore {
    */
   async decryptSession(encryptedSession: string): Promise<Session> {
     try {
-      const password = this.config.getValue('cookiePassword');
       const session = await this.encryption.unsealData<Session>(
         encryptedSession,
-        { password },
+        { password: this.config.cookiePassword },
       );
       return session;
     } catch (error) {

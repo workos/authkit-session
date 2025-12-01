@@ -2,13 +2,8 @@ import { AuthKitCore } from './AuthKitCore.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 
 const mockConfig = {
-  getValue: (key: string) => {
-    const values = {
-      cookiePassword: 'test-password-that-is-32-chars-long!!',
-      clientId: 'test-client-id',
-    };
-    return values[key as keyof typeof values];
-  },
+  cookiePassword: 'test-password-that-is-32-chars-long!!',
+  clientId: 'test-client-id',
 };
 
 const mockUser = {
@@ -22,6 +17,7 @@ const mockUser = {
   createdAt: '2023-01-01T00:00:00Z',
   updatedAt: '2023-01-01T00:00:00Z',
   lastSignInAt: '2023-01-01T00:00:00Z',
+  locale: 'en-US',
   externalId: null,
   metadata: {},
 } as const;
@@ -95,7 +91,8 @@ describe('AuthKitCore', () => {
 
   describe('isTokenExpiring()', () => {
     it('returns true when token expires soon', () => {
-      const soonExpiry = Math.floor(Date.now() / 1000) + 30;
+      // Token expires in 5 seconds, which is within the default 10-second buffer
+      const soonExpiry = Math.floor(Date.now() / 1000) + 5;
       const expiringJwt = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(JSON.stringify({ exp: soonExpiry }))}.fake-signature`;
 
       const result = core.isTokenExpiring(expiringJwt);

@@ -58,10 +58,11 @@ export class AuthService<TRequest, TResponse> {
    */
   private get core(): AuthKitCore {
     if (!this._core) {
+      const resolvedConfig = this.config.getConfig();
       this._core = new AuthKitCore(
-        this.config,
-        this.clientFactory(this.config.getConfig()),
-        this.encryptionFactory(this.config.getConfig()),
+        resolvedConfig,
+        this.clientFactory(resolvedConfig),
+        this.encryptionFactory(resolvedConfig),
       );
     }
     return this._core;
@@ -73,10 +74,11 @@ export class AuthService<TRequest, TResponse> {
    */
   private get operations(): AuthOperations {
     if (!this._operations) {
+      const resolvedConfig = this.config.getConfig();
       this._operations = new AuthOperations(
         this.core,
-        this.clientFactory(this.config.getConfig()),
-        this.config,
+        this.clientFactory(resolvedConfig),
+        resolvedConfig,
       );
     }
     return this._operations;
