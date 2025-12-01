@@ -41,6 +41,12 @@ export type AuthResult<TCustomClaims = Record<string, unknown>> =
       accessToken: string;
       refreshToken: string;
       claims: BaseTokenClaims & TCustomClaims;
+      organizationId?: string;
+      role?: string;
+      roles?: string[];
+      permissions?: string[];
+      entitlements?: string[];
+      featureFlags?: string[];
       impersonator?: Impersonator;
     };
 

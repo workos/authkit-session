@@ -137,6 +137,12 @@ export class AuthOperations {
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       claims,
+      organizationId: claims.org_id,
+      role: claims.role,
+      roles: claims.roles,
+      permissions: claims.permissions,
+      entitlements: claims.entitlements,
+      featureFlags: claims.feature_flags,
     };
 
     return {

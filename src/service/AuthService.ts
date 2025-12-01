@@ -82,6 +82,12 @@ export class AuthService<TRequest, TResponse> {
         impersonator: session.impersonator,
         accessToken: session.accessToken,
         sessionId: claims.sid,
+        organizationId: claims.org_id,
+        role: claims.role,
+        roles: claims.roles,
+        permissions: claims.permissions,
+        entitlements: claims.entitlements,
+        featureFlags: claims.feature_flags,
       };
 
       if (refreshed) {
