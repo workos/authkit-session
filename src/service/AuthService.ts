@@ -142,10 +142,26 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
-   * Sign out operation - delegates to AuthOperations.
+   * Sign out operation.
+   *
+   * Gets the WorkOS logout URL and clears the session via storage.
+   * Returns the URL plus whatever the storage returns (headers and/or response).
+   *
+   * @param sessionId - The session ID to terminate
+   * @param options - Optional return URL
+   * @returns Logout URL and storage clear result (headers and/or response)
    */
-  async signOut(sessionId: string, options?: { returnTo?: string }) {
-    return this.operations.signOut(sessionId, options);
+  async signOut(
+    sessionId: string,
+    options?: { returnTo?: string },
+  ): Promise<{
+    logoutUrl: string;
+    response?: TResponse;
+    headers?: HeadersBag;
+  }> {
+    const logoutUrl = this.operations.getLogoutUrl(sessionId, options);
+    const clearResult = await this.storage.clearSession(undefined);
+    return { logoutUrl, ...clearResult };
   }
 
   /**

@@ -26,7 +26,10 @@ const mockUser = {
 const mockStorage = {
   getSession: async () => 'encrypted-session-data',
   saveSession: async () => ({ response: 'updated-response' }),
-  clearSession: async () => ({ response: 'cleared-response' }),
+  clearSession: async () => ({
+    response: 'cleared-response',
+    headers: { 'Set-Cookie': 'wos-session=; Path=/; Max-Age=0' },
+  }),
 };
 
 const mockClient = {
@@ -155,11 +158,12 @@ describe('AuthService', () => {
   });
 
   describe('signOut()', () => {
-    it('delegates to operations', async () => {
+    it('returns logout URL and headers from storage', async () => {
       const result = await service.signOut('session_123');
 
       expect(result.logoutUrl).toContain('session_id=session_123');
-      expect(result.clearCookieHeader).toBeDefined();
+      expect(result.headers).toBeDefined();
+      expect(result.headers?.['Set-Cookie']).toContain('wos-session=');
     });
   });
 

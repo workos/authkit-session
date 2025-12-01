@@ -3,7 +3,6 @@ import type { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import type {
   AuthResult,
-  BaseTokenClaims,
   GetAuthorizationUrlOptions,
   Session,
 } from '../core/session/types.js';
@@ -32,36 +31,20 @@ export class AuthOperations {
   }
 
   /**
-   * Sign out operation.
+   * Get the WorkOS logout URL.
    *
-   * Returns the WorkOS logout URL and a cookie clear header string.
-   * The framework is responsible for applying the header and redirecting.
+   * This only handles the WorkOS API part. Session clearing is handled
+   * by the storage layer in AuthService.
    *
    * @param sessionId - The session ID to terminate
    * @param options - Optional return URL
-   * @returns Logout URL and clear cookie header
+   * @returns Logout URL
    */
-  async signOut(
-    sessionId: string,
-    options?: { returnTo?: string },
-  ): Promise<{
-    logoutUrl: string;
-    clearCookieHeader: string;
-  }> {
-    // Generate WorkOS logout URL
-    const logoutUrl = this.client.userManagement.getLogoutUrl({
+  getLogoutUrl(sessionId: string, options?: { returnTo?: string }): string {
+    return this.client.userManagement.getLogoutUrl({
       sessionId,
       returnTo: options?.returnTo,
     });
-
-    // Build cookie clear header
-    const cookieName = this.config.cookieName ?? 'wos-session';
-    const clearCookieHeader = `${cookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=lax`;
-
-    return {
-      logoutUrl,
-      clearCookieHeader,
-    };
   }
 
   /**
@@ -88,7 +71,7 @@ export class AuthOperations {
   /**
    * Refresh session operation.
    *
-   * Calls WorkOS to refresh tokens (optionally switching organizations),
+   * Forces a token refresh (for org switching or manual refresh),
    * encrypts the new session, and returns the auth result.
    *
    * @param session - Current session with refresh token
@@ -102,40 +85,20 @@ export class AuthOperations {
     auth: AuthResult;
     encryptedSession: string;
   }> {
-    // Determine which organization to use
-    let orgId = organizationId;
-    if (!orgId) {
-      // Extract org from current token (decodeJwt works even on expired tokens)
-      try {
-        const claims = this.core.parseTokenClaims<BaseTokenClaims>(
-          session.accessToken,
-        );
-        orgId = claims.org_id;
-      } catch {
-        // Token too malformed to parse - refresh without org context
-        // WorkOS will use whatever org is embedded in the refresh token
-      }
-    }
-
-    const result = await this.core.refreshTokens(session.refreshToken, orgId);
-
-    const newSession: Session = {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      user: result.user,
-      impersonator: result.impersonator,
-    };
+    // Force refresh via core, optionally switching organizations
+    const { session: newSession, claims } = await this.core.validateAndRefresh(
+      session,
+      { force: true, organizationId },
+    );
 
     const encryptedSession = await this.core.encryptSession(newSession);
 
-    const claims = this.core.parseTokenClaims(result.accessToken);
-
     const auth: AuthResult = {
-      user: result.user,
+      user: newSession.user,
       sessionId: claims.sid,
-      impersonator: result.impersonator,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
+      impersonator: newSession.impersonator,
+      accessToken: newSession.accessToken,
+      refreshToken: newSession.refreshToken,
       claims,
       organizationId: claims.org_id,
       role: claims.role,

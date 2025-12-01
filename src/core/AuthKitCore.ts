@@ -193,11 +193,15 @@ export class AuthKitCore {
    * 3. Should we refresh it?
    *
    * @param session - The current session with access and refresh tokens
+   * @param options - Optional settings
+   * @param options.force - Force refresh even if token is valid (for org switching)
+   * @param options.organizationId - Organization ID to switch to during refresh
    * @returns Validation result with refreshed session if needed
    * @throws TokenRefreshError if refresh fails
    */
   async validateAndRefresh<TCustomClaims = CustomClaims>(
     session: Session,
+    options?: { force?: boolean; organizationId?: string },
   ): Promise<{
     valid: boolean;
     refreshed: boolean;
@@ -205,15 +209,20 @@ export class AuthKitCore {
     claims: BaseTokenClaims & TCustomClaims;
   }> {
     const { accessToken } = session;
+    const { force = false, organizationId: explicitOrgId } = options ?? {};
+
     const isValid = await this.verifyToken(accessToken);
     const isExpiring = this.isTokenExpiring(accessToken);
-    if (isValid && !isExpiring) {
+
+    // Return early if token is valid, not expiring, and not forced
+    if (isValid && !isExpiring && !force) {
       const claims = this.parseTokenClaims<TCustomClaims>(accessToken);
       return { valid: true, refreshed: false, session, claims };
     }
 
-    let organizationId: string | undefined;
-    if (isValid) {
+    // Determine organization ID: explicit > extracted from token
+    let organizationId = explicitOrgId;
+    if (!organizationId && isValid) {
       try {
         const oldClaims = this.parseTokenClaims(accessToken);
         organizationId = oldClaims.org_id;

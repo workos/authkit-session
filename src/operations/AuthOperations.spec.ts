@@ -23,19 +23,23 @@ const mockUser = {
 } as const;
 
 const mockCore = {
-  refreshTokens: async () => ({
-    accessToken: 'new-access-token',
-    refreshToken: 'new-refresh-token',
-    user: mockUser,
-    impersonator: undefined,
+  validateAndRefresh: async () => ({
+    valid: true,
+    refreshed: true,
+    session: {
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      user: mockUser,
+      impersonator: undefined,
+    },
+    claims: {
+      sub: 'user_123',
+      sid: 'session_123',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      org_id: 'org_123',
+    },
   }),
   encryptSession: async () => 'encrypted-session-data',
-  parseTokenClaims: () => ({
-    sub: 'user_123',
-    sid: 'session_123',
-    exp: Math.floor(Date.now() / 1000) + 3600,
-    org_id: 'org_123',
-  }),
 };
 
 const mockClient = {
@@ -64,21 +68,19 @@ describe('AuthOperations', () => {
     });
   });
 
-  describe('signOut()', () => {
-    it('returns logout URL and clear cookie header', async () => {
-      const result = await operations.signOut('session_123');
+  describe('getLogoutUrl()', () => {
+    it('returns logout URL with session ID', () => {
+      const result = operations.getLogoutUrl('session_123');
 
-      expect(result.logoutUrl).toContain('session_id=session_123');
-      expect(result.clearCookieHeader).toContain('wos-session=');
-      expect(result.clearCookieHeader).toContain('Max-Age=0');
+      expect(result).toContain('session_id=session_123');
     });
 
-    it('includes returnTo in logout URL', async () => {
-      const result = await operations.signOut('session_123', {
+    it('includes returnTo in logout URL', () => {
+      const result = operations.getLogoutUrl('session_123', {
         returnTo: 'http://localhost:3000',
       });
 
-      expect(result.logoutUrl).toContain('return_to=');
+      expect(result).toContain('return_to=');
     });
   });
 
@@ -94,7 +96,9 @@ describe('AuthOperations', () => {
       const result = await operations.switchOrganization(session, 'org_456');
 
       expect(result.auth.user).toEqual(mockUser);
-      expect(result.auth.accessToken).toBe('new-access-token');
+      if (result.auth.user) {
+        expect(result.auth.accessToken).toBe('new-access-token');
+      }
       expect(result.encryptedSession).toBe('encrypted-session-data');
     });
   });
@@ -117,21 +121,29 @@ describe('AuthOperations', () => {
       expect(result.encryptedSession).toBe('encrypted-session-data');
     });
 
-    it('includes organizationId when provided', async () => {
+    it('passes organizationId to validateAndRefresh when provided', async () => {
+      let capturedOptions: any;
       const coreWithSpy = {
-        refreshTokens: async (_token: string, orgId?: string) => ({
-          accessToken: orgId ? 'org-token' : 'regular-token',
-          refreshToken: 'new-refresh-token',
-          user: mockUser,
-          impersonator: undefined,
-        }),
+        validateAndRefresh: async (_session: any, options?: any) => {
+          capturedOptions = options;
+          return {
+            valid: true,
+            refreshed: true,
+            session: {
+              accessToken: 'new-access-token',
+              refreshToken: 'new-refresh-token',
+              user: mockUser,
+              impersonator: undefined,
+            },
+            claims: {
+              sub: 'user_123',
+              sid: 'session_123',
+              exp: Math.floor(Date.now() / 1000) + 3600,
+              org_id: 'org_456',
+            },
+          };
+        },
         encryptSession: async () => 'encrypted-session-data',
-        parseTokenClaims: () => ({
-          sub: 'user_123',
-          sid: 'session_123',
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          org_id: 'org_123',
-        }),
       };
       const testOps = new AuthOperations(
         coreWithSpy as any,
@@ -146,30 +158,37 @@ describe('AuthOperations', () => {
         impersonator: undefined,
       };
 
-      const result = await testOps.refreshSession(session, 'org_456');
+      await testOps.refreshSession(session, 'org_456');
 
-      expect(result.auth.accessToken).toBe('org-token');
+      expect(capturedOptions).toEqual({
+        force: true,
+        organizationId: 'org_456',
+      });
     });
 
-    it('extracts org from current token when not provided', async () => {
-      const validJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fMTIzIiwiZXhwIjoxNzM2Mzc2MDAwLCJvcmdfaWQiOiJvcmdfZnJvbV90b2tlbiJ9.fake-signature';
-
+    it('calls validateAndRefresh with force: true and no organizationId when not provided', async () => {
+      let capturedOptions: any;
       const coreWithSpy = {
-        refreshTokens: async (_token: string, orgId?: string) => ({
-          accessToken:
-            orgId === 'org_from_token' ? 'extracted-org-token' : 'no-org-token',
-          refreshToken: 'new-refresh-token',
-          user: mockUser,
-          impersonator: undefined,
-        }),
+        validateAndRefresh: async (_session: any, options?: any) => {
+          capturedOptions = options;
+          return {
+            valid: true,
+            refreshed: true,
+            session: {
+              accessToken: 'new-access-token',
+              refreshToken: 'new-refresh-token',
+              user: mockUser,
+              impersonator: undefined,
+            },
+            claims: {
+              sub: 'user_123',
+              sid: 'session_123',
+              exp: Math.floor(Date.now() / 1000) + 3600,
+              org_id: 'org_123',
+            },
+          };
+        },
         encryptSession: async () => 'encrypted-session-data',
-        parseTokenClaims: () => ({
-          sub: 'user_123',
-          sid: 'session_123',
-          exp: 1736376000,
-          org_id: 'org_from_token',
-        }),
       };
       const testOps = new AuthOperations(
         coreWithSpy as any,
@@ -178,15 +197,18 @@ describe('AuthOperations', () => {
       );
 
       const session = {
-        accessToken: validJwt,
+        accessToken: 'test-token',
         refreshToken: 'test-refresh',
         user: mockUser,
         impersonator: undefined,
       };
 
-      const result = await testOps.refreshSession(session);
+      await testOps.refreshSession(session);
 
-      expect(result.auth.accessToken).toBe('extracted-org-token');
+      expect(capturedOptions).toEqual({
+        force: true,
+        organizationId: undefined,
+      });
     });
   });
 
