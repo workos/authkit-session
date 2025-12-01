@@ -221,13 +221,47 @@ describe('AuthService', () => {
       expect(result.returnPathname).toBe('/dashboard');
     });
 
-    it('uses default returnPathname for invalid state', async () => {
+    it('treats invalid state as custom state', async () => {
       const result = await service.handleCallback('request', 'response', {
         code: 'auth-code-123',
         state: 'invalid-state',
       });
 
       expect(result.returnPathname).toBe('/');
+      expect(result.state).toBe('invalid-state');
+    });
+
+    it('parses new format with internal.userState', async () => {
+      // Create URL-safe base64 internal state
+      const internal = btoa(JSON.stringify({ returnPathname: '/profile' }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      const state = `${internal}.my-custom-state`;
+
+      const result = await service.handleCallback('request', 'response', {
+        code: 'auth-code-123',
+        state,
+      });
+
+      expect(result.returnPathname).toBe('/profile');
+      expect(result.state).toBe('my-custom-state');
+    });
+
+    it('handles user state with dots', async () => {
+      const internal = btoa(JSON.stringify({ returnPathname: '/dashboard' }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      const state = `${internal}.user.state.with.dots`;
+
+      const result = await service.handleCallback('request', 'response', {
+        code: 'auth-code-123',
+        state,
+      });
+
+      expect(result.returnPathname).toBe('/dashboard');
+      expect(result.state).toBe('user.state.with.dots');
     });
   });
 });

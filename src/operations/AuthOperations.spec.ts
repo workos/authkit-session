@@ -220,7 +220,7 @@ describe('AuthOperations', () => {
       expect(result).toContain('redirect_uri');
     });
 
-    it('encodes returnPathname in state', async () => {
+    it('encodes returnPathname in URL-safe base64 state', async () => {
       const result = await operations.getAuthorizationUrl({
         returnPathname: '/dashboard',
       });
@@ -228,8 +228,47 @@ describe('AuthOperations', () => {
       expect(result).toContain('state=');
       const stateMatch = result.match(/state=([^&]+)/);
       expect(stateMatch).toBeTruthy();
-      const decoded = JSON.parse(atob(stateMatch![1]));
+
+      // Decode URL-safe base64: reverse - to +, _ to /
+      const urlSafeState = stateMatch![1];
+      const standardBase64 = urlSafeState.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(standardBase64));
       expect(decoded.returnPathname).toBe('/dashboard');
+    });
+
+    it('combines internal state with custom user state', async () => {
+      const result = await operations.getAuthorizationUrl({
+        returnPathname: '/profile',
+        state: 'my-custom-state',
+      });
+
+      expect(result).toContain('state=');
+      const stateMatch = result.match(/state=([^&]+)/);
+      expect(stateMatch).toBeTruthy();
+
+      // State should be in format: internal.userState
+      const fullState = stateMatch![1];
+      expect(fullState).toContain('.');
+      const [internal, userState] = fullState.split('.');
+      expect(userState).toBe('my-custom-state');
+
+      // Decode internal part
+      const standardBase64 = internal.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(standardBase64));
+      expect(decoded.returnPathname).toBe('/profile');
+    });
+
+    it('passes custom state as-is when no returnPathname', async () => {
+      const result = await operations.getAuthorizationUrl({
+        state: 'only-user-state',
+      });
+
+      expect(result).toContain('state=');
+      const stateMatch = result.match(/state=([^&]+)/);
+      expect(stateMatch).toBeTruthy();
+
+      // State should be passed through directly without internal wrapper
+      expect(stateMatch![1]).toBe('only-user-state');
     });
 
     it('includes screenHint when provided', async () => {

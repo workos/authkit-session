@@ -245,14 +245,35 @@ export class AuthService<TRequest, TResponse> {
       encryptedSession,
     );
 
-    // Decode return pathname from state
+    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
     let returnPathname = '/';
+    let customState: string | undefined;
+
     if (options.state) {
-      try {
-        const decoded = JSON.parse(atob(options.state));
-        returnPathname = decoded.returnPathname || '/';
-      } catch {
-        // Invalid state, use default
+      if (options.state.includes('.')) {
+        const [internal, ...rest] = options.state.split('.');
+        customState = rest.join('.'); // Rejoin in case userState contains dots
+        try {
+          // Reverse URL-safe base64 encoding and decode
+          const decoded = (internal ?? '')
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+          const parsed = JSON.parse(atob(decoded));
+          returnPathname = parsed.returnPathname || '/';
+        } catch {
+          // Malformed internal state, use default
+        }
+      } else {
+        try {
+          const parsed = JSON.parse(atob(options.state));
+          if (parsed.returnPathname) {
+            returnPathname = parsed.returnPathname;
+          } else {
+            customState = options.state;
+          }
+        } catch {
+          customState = options.state;
+        }
       }
     }
 
@@ -260,6 +281,7 @@ export class AuthService<TRequest, TResponse> {
       response: updatedResponse,
       headers,
       returnPathname,
+      state: customState,
       authResponse,
     };
   }

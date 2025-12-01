@@ -142,6 +142,8 @@ export interface AuthUrlOptions {
   organizationId?: string;
   loginHint?: string;
   prompt?: 'login' | 'none' | 'consent' | 'select_account';
+  /** Custom state to pass through the OAuth flow. Returned in handleCallback. */
+  state?: string;
 }
 
 /**

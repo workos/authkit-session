@@ -117,14 +117,30 @@ export class AuthOperations {
   /**
    * Get authorization URL for WorkOS authentication.
    *
-   * Builds the WorkOS authorization URL with proper state encoding.
+   * State encoding format: `{internal}.{userState}` where internal is URL-safe
+   * base64 encoded JSON containing returnPathname. This allows customers to
+   * pass their own state through the OAuth flow.
    *
-   * @param options - Authorization URL options (returnPathname, screenHint, etc.)
+   * @param options - Authorization URL options (returnPathname, screenHint, state, etc.)
    * @returns The authorization URL
    */
   async getAuthorizationUrl(
     options: GetAuthorizationUrlOptions = {},
   ): Promise<string> {
+    // Build the combined state parameter (matches authkit-nextjs format)
+    const internalState = options.returnPathname
+      ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+      : null;
+
+    // If both internal and custom state, combine as internal.custom
+    // Otherwise use whichever is provided
+    const state =
+      internalState && options.state
+        ? `${internalState}.${options.state}`
+        : internalState || options.state || undefined;
+
     return this.client.userManagement.getAuthorizationUrl({
       provider: 'authkit',
       redirectUri: options.redirectUri ?? this.config.redirectUri,
@@ -133,9 +149,7 @@ export class AuthOperations {
       loginHint: options.loginHint,
       prompt: options.prompt,
       clientId: this.config.clientId,
-      state: options.returnPathname
-        ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
-        : undefined,
+      state,
     });
   }
 
