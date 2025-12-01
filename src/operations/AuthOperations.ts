@@ -21,11 +21,19 @@ import type {
  * - Get authorization URLs (for sign in/sign up flows)
  */
 export class AuthOperations {
+  private core: AuthKitCore;
+  private client: WorkOS;
+  private config: ConfigurationProvider;
+
   constructor(
-    private core: AuthKitCore,
-    private client: WorkOS,
-    private config: ConfigurationProvider,
-  ) {}
+    core: AuthKitCore,
+    client: WorkOS,
+    config: ConfigurationProvider,
+  ) {
+    this.core = core;
+    this.client = client;
+    this.config = config;
+  }
 
   /**
    * Sign out operation.
