@@ -2,7 +2,9 @@ import { CookieSessionStorage } from './CookieSessionStorage.js';
 import type { AuthKitConfig } from '../config/types.js';
 
 // Mock config
-const createMockConfig = (overrides: Partial<AuthKitConfig> = {}): AuthKitConfig => ({
+const createMockConfig = (
+  overrides: Partial<AuthKitConfig> = {},
+): AuthKitConfig => ({
   clientId: 'test-client-id',
   apiKey: 'test-api-key',
   redirectUri: 'https://example.com/callback',
@@ -53,14 +55,18 @@ describe('CookieSessionStorage', () => {
     });
 
     it('infers secure=false from http redirectUri', () => {
-      const config = createMockConfig({ redirectUri: 'http://localhost:3000/callback' });
+      const config = createMockConfig({
+        redirectUri: 'http://localhost:3000/callback',
+      });
       const storage = new TestCookieSessionStorage(config);
 
       expect(storage['cookieOptions'].secure).toBe(false);
     });
 
     it('infers secure=true from https redirectUri', () => {
-      const config = createMockConfig({ redirectUri: 'https://example.com/callback' });
+      const config = createMockConfig({
+        redirectUri: 'https://example.com/callback',
+      });
       const storage = new TestCookieSessionStorage(config);
 
       expect(storage['cookieOptions'].secure).toBe(true);

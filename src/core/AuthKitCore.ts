@@ -30,7 +30,11 @@ export class AuthKitCore {
   private encryption: SessionEncryption;
   private clientId: string;
 
-  constructor(config: AuthKitConfig, client: WorkOS, encryption: SessionEncryption) {
+  constructor(
+    config: AuthKitConfig,
+    client: WorkOS,
+    encryption: SessionEncryption,
+  ) {
     this.config = config;
     this.client = client;
     this.encryption = encryption;
