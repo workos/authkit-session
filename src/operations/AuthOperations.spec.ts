@@ -113,11 +113,12 @@ describe('AuthOperations', () => {
       };
 
       const result = await operations.refreshSession(session);
+      const auth = result.auth as Extract<typeof result.auth, { user: object }>;
 
-      expect(result.auth.user).toEqual(mockUser);
-      expect(result.auth.accessToken).toBe('new-access-token');
-      expect(result.auth.refreshToken).toBe('new-refresh-token');
-      expect(result.auth.sessionId).toBe('session_123');
+      expect(auth.user).toEqual(mockUser);
+      expect(auth.accessToken).toBe('new-access-token');
+      expect(auth.refreshToken).toBe('new-refresh-token');
+      expect(auth.sessionId).toBe('session_123');
       expect(result.encryptedSession).toBe('encrypted-session-data');
     });
 
@@ -230,7 +231,7 @@ describe('AuthOperations', () => {
       expect(stateMatch).toBeTruthy();
 
       // Decode URL-safe base64: reverse - to +, _ to /
-      const urlSafeState = stateMatch![1];
+      const urlSafeState = stateMatch![1]!;
       const standardBase64 = urlSafeState.replace(/-/g, '+').replace(/_/g, '/');
       const decoded = JSON.parse(atob(standardBase64));
       expect(decoded.returnPathname).toBe('/dashboard');
@@ -247,13 +248,13 @@ describe('AuthOperations', () => {
       expect(stateMatch).toBeTruthy();
 
       // State should be in format: internal.userState
-      const fullState = stateMatch![1];
+      const fullState = stateMatch![1]!;
       expect(fullState).toContain('.');
       const [internal, userState] = fullState.split('.');
       expect(userState).toBe('my-custom-state');
 
       // Decode internal part
-      const standardBase64 = internal.replace(/-/g, '+').replace(/_/g, '/');
+      const standardBase64 = internal!.replace(/-/g, '+').replace(/_/g, '/');
       const decoded = JSON.parse(atob(standardBase64));
       expect(decoded.returnPathname).toBe('/profile');
     });
