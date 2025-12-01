@@ -88,9 +88,9 @@ export class AuthKitCore {
    * @param token - The JWT access token
    * @returns Unix timestamp of expiry, or null if not present
    */
-  private getTokenExpiryTime(token: string): number | null {
+  private getTokenExpiryTime(token: string): number | undefined {
     const claims = this.parseTokenClaims(token);
-    return claims.exp ?? null;
+    return claims.exp;
   }
 
   /**
