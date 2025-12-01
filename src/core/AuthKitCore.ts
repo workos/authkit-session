@@ -18,7 +18,6 @@ import type {
  *
  * Responsibilities:
  * - Token validation (JWT verification against JWKS)
- * - Token expiry detection
  * - Token claims parsing
  * - Session encryption/decryption
  * - Token refresh (calling WorkOS API)
@@ -187,10 +186,7 @@ export class AuthKitCore {
   /**
    * Validate a session and refresh if needed.
    *
-   * This is the core orchestration method that decides:
-   * 1. Is the token valid?
-   * 2. Is it expiring soon?
-   * 3. Should we refresh it?
+   * Only refreshes when token is invalid (expired) or force is true.
    *
    * @param session - The current session with access and refresh tokens
    * @param options - Optional settings
@@ -212,10 +208,9 @@ export class AuthKitCore {
     const { force = false, organizationId: explicitOrgId } = options ?? {};
 
     const isValid = await this.verifyToken(accessToken);
-    const isExpiring = this.isTokenExpiring(accessToken);
 
-    // Return early if token is valid, not expiring, and not forced
-    if (isValid && !isExpiring && !force) {
+    // Return early if token is valid and not forced
+    if (isValid && !force) {
       const claims = this.parseTokenClaims<TCustomClaims>(accessToken);
       return { valid: true, refreshed: false, session, claims };
     }
