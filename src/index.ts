@@ -3,20 +3,21 @@
  *
  * Framework-agnostic authentication library for WorkOS.
  *
- * Provides authentication business logic (JWT verification, session encryption,
- * token refresh) with a pluggable storage adapter pattern for framework integration.
+ * Provides authentication business logic (JWT verification, token refresh)
+ * with a pluggable storage adapter pattern for framework integration.
  *
  * **What frameworks do:**
  * - Implement storage adapter (SessionStorage<TRequest, TResponse>)
  * - Add middleware for auth validation and refresh
  * - Export framework-specific helpers
+ * - Handle session encryption (or use our fallback)
  *
  * **What this library does:**
  * - All authentication logic (AuthService)
- * - Session encryption (AES-256-CBC)
  * - JWT verification (JWKS with caching)
  * - Token refresh orchestration
  * - WorkOS API operations
+ * - Session encryption fallback (iron-webcrypto, AES-256-CBC)
  */
 
 // ============================================
@@ -35,6 +36,11 @@ export { AuthOperations } from './operations/AuthOperations.js';
 // Storage Helpers
 // ============================================
 export { CookieSessionStorage } from './core/session/CookieSessionStorage.js';
+
+// ============================================
+// Encryption Fallback
+// ============================================
+export { default as sessionEncryption } from './core/encryption/ironWebcryptoEncryption.js';
 
 // ============================================
 // Configuration
