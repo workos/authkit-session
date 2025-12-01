@@ -1,4 +1,4 @@
-import type { ConfigurationProvider } from '../config/ConfigurationProvider.js';
+import type { AuthKitConfig } from '../config/types.js';
 import type { HeadersBag, SessionStorage } from './types.js';
 
 export interface CookieOptions {
@@ -18,35 +18,31 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
 {
   protected cookieName: string;
   protected readonly cookieOptions: CookieOptions;
-  protected config: ConfigurationProvider;
 
-  constructor(config: ConfigurationProvider) {
-    this.config = config;
-    this.cookieName = config.getValue('cookieName') || 'wos_session';
+  constructor(config: AuthKitConfig) {
+    this.cookieName = config.cookieName ?? 'wos_session';
 
-    // Infer secure flag from redirectUri if not explicitly set
-    let secure = config.getValue('apiHttps');
-    if (secure === undefined) {
-      const redirectUri = config.getValue('redirectUri');
-      if (redirectUri) {
-        try {
-          const url = new URL(redirectUri);
-          secure = url.protocol === 'https:';
-        } catch {
-          secure = true; // Default to secure if URL parsing fails
-        }
-      } else {
-        secure = true; // Default to secure if no redirectUri
+    const sameSite = config.cookieSameSite ?? 'lax';
+
+    // Infer secure flag from redirectUri protocol
+    // sameSite='none' requires secure=true (browser requirement)
+    let secure = true;
+    if (sameSite.toLowerCase() !== 'none') {
+      try {
+        const url = new URL(config.redirectUri);
+        secure = url.protocol === 'https:';
+      } catch {
+        // Invalid URL - keep secure=true (safer default)
       }
     }
 
     this.cookieOptions = {
       path: '/',
       httpOnly: true,
-      sameSite: config.getValue('cookieSameSite') ?? 'lax',
+      sameSite,
       secure,
-      maxAge: config.getValue('cookieMaxAge') || 60 * 60 * 24 * 400, // 400 days
-      domain: config.getValue('cookieDomain'),
+      maxAge: config.cookieMaxAge ?? 60 * 60 * 24 * 400, // 400 days
+      domain: config.cookieDomain,
     };
   }
 
