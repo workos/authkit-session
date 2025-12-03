@@ -1,4 +1,4 @@
-import type { ConfigurationProvider } from '../config/ConfigurationProvider.js';
+import type { AuthKitConfig } from '../config/types.js';
 import type { HeadersBag, SessionStorage } from './types.js';
 
 export interface CookieOptions {
@@ -18,18 +18,31 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
 {
   protected cookieName: string;
   protected readonly cookieOptions: CookieOptions;
-  protected config: ConfigurationProvider;
 
-  constructor(config: ConfigurationProvider) {
-    this.config = config;
-    this.cookieName = config.getValue('cookieName') || 'wos_session';
+  constructor(config: AuthKitConfig) {
+    this.cookieName = config.cookieName ?? 'wos_session';
+
+    const sameSite = config.cookieSameSite ?? 'lax';
+
+    // Infer secure flag from redirectUri protocol
+    // sameSite='none' requires secure=true (browser requirement)
+    let secure = true;
+    if (sameSite.toLowerCase() !== 'none') {
+      try {
+        const url = new URL(config.redirectUri);
+        secure = url.protocol === 'https:';
+      } catch {
+        // Invalid URL - keep secure=true (safer default)
+      }
+    }
+
     this.cookieOptions = {
       path: '/',
       httpOnly: true,
-      sameSite: config.getValue('cookieSameSite') ?? 'lax',
-      secure: config.getValue('apiHttps') ?? true,
-      maxAge: config.getValue('cookieMaxAge') || 60 * 60 * 24 * 400, // 400 days
-      domain: config.getValue('cookieDomain'),
+      sameSite,
+      secure,
+      maxAge: config.cookieMaxAge ?? 60 * 60 * 24 * 400, // 400 days
+      domain: config.cookieDomain,
     };
   }
 
@@ -48,7 +61,11 @@ export abstract class CookieSessionStorage<TRequest, TResponse>
     if (o.maxAge || expired) a.push(`Max-Age=${expired ? 0 : o.maxAge}`);
     if (o.httpOnly) a.push('HttpOnly');
     if (o.secure) a.push('Secure');
-    if (o.sameSite) a.push(`SameSite=${o.sameSite}`);
+    if (o.sameSite) {
+      const capitalizedSameSite =
+        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
+      a.push(`SameSite=${capitalizedSameSite}`);
+    }
     if (o.priority) a.push(`Priority=${o.priority}`);
     if (o.partitioned) a.push('Partitioned');
     return a.join('; ');

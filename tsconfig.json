@@ -10,6 +10,7 @@
     "verbatimModuleSyntax": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "erasableSyntaxOnly": true,
     "noImplicitOverride": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",

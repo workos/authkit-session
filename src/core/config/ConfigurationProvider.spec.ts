@@ -6,6 +6,7 @@ describe('ConfigurationProvider', () => {
 
   beforeEach(() => {
     provider = new ConfigurationProvider();
+    provider.setValueSource(() => undefined); // Default to no env vars
   });
 
   describe('configure()', () => {

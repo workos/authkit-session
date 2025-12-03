@@ -1,0 +1,288 @@
+import type { WorkOS } from '@workos-inc/node';
+import { AuthKitCore } from '../core/AuthKitCore.js';
+import type { AuthKitConfig } from '../core/config/types.js';
+import { AuthOperations } from '../operations/AuthOperations.js';
+import type {
+  AuthResult,
+  CustomClaims,
+  GetAuthorizationUrlOptions,
+  HeadersBag,
+  Session,
+  SessionEncryption,
+  SessionStorage,
+} from '../core/session/types.js';
+
+/**
+ * Framework-agnostic authentication service.
+ *
+ * Coordinates between:
+ * - AuthKitCore (pure business logic: crypto, JWT, refresh)
+ * - AuthOperations (WorkOS API operations: signOut, refreshSession, URLs)
+ * - SessionStorage<TRequest, TResponse> (framework-specific storage)
+ *
+ * Provides common patterns:
+ * - `withAuth()` - Validate session with auto-refresh
+ * - `handleCallback()` - Process OAuth callback
+ * - `signOut()`, `getSignInUrl()`, etc. - Delegate to AuthOperations
+ *
+ * **Used by:** @workos/authkit-tanstack-react-start
+ */
+export class AuthService<TRequest, TResponse> {
+  private readonly core: AuthKitCore;
+  private readonly operations: AuthOperations;
+  private readonly storage: SessionStorage<TRequest, TResponse>;
+  private readonly config: AuthKitConfig;
+  private readonly client: WorkOS;
+
+  constructor(
+    config: AuthKitConfig,
+    storage: SessionStorage<TRequest, TResponse>,
+    client: WorkOS,
+    encryption: SessionEncryption,
+  ) {
+    this.config = config;
+    this.storage = storage;
+    this.client = client;
+    this.core = new AuthKitCore(config, client, encryption);
+    this.operations = new AuthOperations(this.core, client, config);
+  }
+
+  /**
+   * Main authentication check method.
+   *
+   * This method:
+   * 1. Reads encrypted session from request (via storage)
+   * 2. Validates and potentially refreshes the session (via core)
+   * 3. Returns auth result + optionally refreshed session data
+   *
+   * @param request - Framework-specific request object
+   * @returns Auth result and optional refreshed session data
+   */
+  async withAuth<TCustomClaims = CustomClaims>(
+    request: TRequest,
+  ): Promise<{
+    auth: AuthResult<TCustomClaims>;
+    refreshedSessionData?: string;
+  }> {
+    try {
+      const encryptedSession = await this.storage.getSession(request);
+      if (!encryptedSession) {
+        return { auth: { user: null } };
+      }
+
+      const { claims, session, refreshed } =
+        await this.core.validateAndRefresh<TCustomClaims>(
+          await this.core.decryptSession(encryptedSession),
+        );
+
+      const auth: AuthResult<TCustomClaims> = {
+        refreshToken: session.refreshToken,
+        user: session.user,
+        claims,
+        impersonator: session.impersonator,
+        accessToken: session.accessToken,
+        sessionId: claims.sid,
+        organizationId: claims.org_id,
+        role: claims.role,
+        roles: claims.roles,
+        permissions: claims.permissions,
+        entitlements: claims.entitlements,
+        featureFlags: claims.feature_flags,
+      };
+
+      if (refreshed) {
+        const refreshedSessionData = await this.core.encryptSession(session);
+        return { auth, refreshedSessionData };
+      }
+
+      return { auth };
+    } catch {
+      return { auth: { user: null } };
+    }
+  }
+
+  /**
+   * Get a session from a request.
+   *
+   * @param request - Framework-specific request object
+   * @returns Decrypted session or null
+   */
+  async getSession(request: TRequest): Promise<Session | null> {
+    const encryptedSession = await this.storage.getSession(request);
+    if (!encryptedSession) {
+      return null;
+    }
+    return this.core.decryptSession(encryptedSession);
+  }
+
+  /**
+   * Save a session to storage.
+   *
+   * @param response - Framework-specific response object (may be undefined)
+   * @param sessionData - Encrypted session string
+   * @returns Updated response and/or headers
+   */
+  async saveSession(
+    response: TResponse | undefined,
+    sessionData: string,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    return this.storage.saveSession(response, sessionData);
+  }
+
+  /**
+   * Clear a session from storage.
+   *
+   * @param response - Framework-specific response object
+   * @returns Updated response and/or headers
+   */
+  async clearSession(
+    response: TResponse,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    return this.storage.clearSession(response);
+  }
+
+  /**
+   * Sign out operation.
+   *
+   * Gets the WorkOS logout URL and clears the session via storage.
+   * Returns the URL plus whatever the storage returns (headers and/or response).
+   *
+   * @param sessionId - The session ID to terminate
+   * @param options - Optional return URL
+   * @returns Logout URL and storage clear result (headers and/or response)
+   */
+  async signOut(
+    sessionId: string,
+    options?: { returnTo?: string },
+  ): Promise<{
+    logoutUrl: string;
+    response?: TResponse;
+    headers?: HeadersBag;
+  }> {
+    const logoutUrl = this.operations.getLogoutUrl(sessionId, options);
+    const clearResult = await this.storage.clearSession(undefined);
+    return { logoutUrl, ...clearResult };
+  }
+
+  /**
+   * Switch organization - delegates to AuthOperations.
+   */
+  async switchOrganization(session: Session, organizationId: string) {
+    return this.operations.switchOrganization(session, organizationId);
+  }
+
+  /**
+   * Refresh session - delegates to AuthOperations.
+   */
+  async refreshSession(session: Session, organizationId?: string) {
+    return this.operations.refreshSession(session, organizationId);
+  }
+
+  /**
+   * Get authorization URL - delegates to AuthOperations.
+   */
+  async getAuthorizationUrl(options: GetAuthorizationUrlOptions = {}) {
+    return this.operations.getAuthorizationUrl(options);
+  }
+
+  /**
+   * Convenience: Get sign-in URL.
+   */
+  async getSignInUrl(
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ) {
+    return this.operations.getSignInUrl(options);
+  }
+
+  /**
+   * Convenience: Get sign-up URL.
+   */
+  async getSignUpUrl(
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ) {
+    return this.operations.getSignUpUrl(options);
+  }
+
+  /**
+   * Get the WorkOS client instance.
+   * Useful for direct API calls not covered by AuthKit.
+   */
+  getWorkOS(): WorkOS {
+    return this.client;
+  }
+
+  /**
+   * Handle OAuth callback.
+   * This creates a new session after successful authentication.
+   *
+   * @param request - Framework-specific request (not currently used)
+   * @param response - Framework-specific response
+   * @param options - OAuth callback options (code, state)
+   * @returns Updated response, return pathname, and auth response
+   */
+  async handleCallback(
+    _request: TRequest,
+    response: TResponse,
+    options: { code: string; state?: string },
+  ) {
+    // Authenticate with WorkOS using the OAuth code
+    const authResponse = await this.client.userManagement.authenticateWithCode({
+      code: options.code,
+      clientId: this.config.clientId,
+    });
+
+    // Create and save the new session
+    const session: Session = {
+      accessToken: authResponse.accessToken,
+      refreshToken: authResponse.refreshToken,
+      user: authResponse.user,
+      impersonator: authResponse.impersonator,
+    };
+
+    const encryptedSession = await this.core.encryptSession(session);
+    const { response: updatedResponse, headers } = await this.saveSession(
+      response,
+      encryptedSession,
+    );
+
+    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
+    let returnPathname = '/';
+    let customState: string | undefined;
+
+    if (options.state) {
+      if (options.state.includes('.')) {
+        const [internal, ...rest] = options.state.split('.');
+        customState = rest.join('.'); // Rejoin in case userState contains dots
+        try {
+          // Reverse URL-safe base64 encoding and decode
+          const decoded = (internal ?? '')
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+          const parsed = JSON.parse(atob(decoded));
+          returnPathname = parsed.returnPathname || '/';
+        } catch {
+          // Malformed internal state, use default
+        }
+      } else {
+        try {
+          const parsed = JSON.parse(atob(options.state));
+          if (parsed.returnPathname) {
+            returnPathname = parsed.returnPathname;
+          } else {
+            customState = options.state;
+          }
+        } catch {
+          customState = options.state;
+        }
+      }
+    }
+
+    return {
+      response: updatedResponse,
+      headers,
+      returnPathname,
+      state: customState,
+      authResponse,
+    };
+  }
+}
