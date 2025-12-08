@@ -93,6 +93,53 @@ describe('TokenRefreshError', () => {
 
     expect(error.cause).toBe(originalError);
   });
+
+  it('creates error with userId and sessionId', () => {
+    const error = new TokenRefreshError('Refresh failed', undefined, {
+      userId: 'user_123',
+      sessionId: 'session_456',
+    });
+
+    expect(error.userId).toBe('user_123');
+    expect(error.sessionId).toBe('session_456');
+  });
+
+  it('creates error with cause and context', () => {
+    const originalError = new Error('Network error');
+    const error = new TokenRefreshError('Refresh failed', originalError, {
+      userId: 'user_123',
+      sessionId: 'session_456',
+    });
+
+    expect(error.cause).toBe(originalError);
+    expect(error.userId).toBe('user_123');
+    expect(error.sessionId).toBe('session_456');
+  });
+
+  it('creates error with partial context (userId only)', () => {
+    const error = new TokenRefreshError('Refresh failed', undefined, {
+      userId: 'user_123',
+    });
+
+    expect(error.userId).toBe('user_123');
+    expect(error.sessionId).toBeUndefined();
+  });
+
+  it('creates error with partial context (sessionId only)', () => {
+    const error = new TokenRefreshError('Refresh failed', undefined, {
+      sessionId: 'session_456',
+    });
+
+    expect(error.userId).toBeUndefined();
+    expect(error.sessionId).toBe('session_456');
+  });
+
+  it('has undefined properties when no context provided', () => {
+    const error = new TokenRefreshError('Refresh failed');
+
+    expect(error.userId).toBeUndefined();
+    expect(error.sessionId).toBeUndefined();
+  });
 });
 
 describe('error inheritance', () => {
