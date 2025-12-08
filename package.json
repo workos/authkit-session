@@ -1,6 +1,6 @@
 {
   "name": "@workos/authkit-session",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Framework-agnostic authentication library for WorkOS with pluggable storage adapters",
   "type": "module",
   "main": "./dist/index.js",
