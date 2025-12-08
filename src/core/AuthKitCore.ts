@@ -152,12 +152,14 @@ export class AuthKitCore {
    *
    * @param refreshToken - The refresh token
    * @param organizationId - Optional organization ID to switch to
+   * @param context - Optional context for error reporting (userId, sessionId)
    * @returns New access token, refresh token, user, and impersonator
    * @throws TokenRefreshError if refresh fails
    */
   async refreshTokens(
     refreshToken: string,
     organizationId?: string,
+    context?: { userId?: string; sessionId?: string },
   ): Promise<{
     accessToken: string;
     refreshToken: string;
@@ -179,7 +181,7 @@ export class AuthKitCore {
         impersonator: result.impersonator,
       };
     } catch (error) {
-      throw new TokenRefreshError('Failed to refresh tokens', error);
+      throw new TokenRefreshError('Failed to refresh tokens', error, context);
     }
   }
 
@@ -226,9 +228,18 @@ export class AuthKitCore {
       }
     }
 
+    // Extract session ID for error context (works on expired tokens too)
+    let sessionId: string | undefined;
+    try {
+      sessionId = this.parseTokenClaims(accessToken).sid;
+    } catch {
+      // Token parsing failed - continue without session context
+    }
+
     const newSession = await this.refreshTokens(
       session.refreshToken,
       organizationId,
+      { userId: session.user?.id, sessionId },
     );
     const newClaims = this.parseTokenClaims<TCustomClaims>(
       newSession.accessToken,

@@ -59,6 +59,16 @@ export { ConfigurationProvider } from './core/config/ConfigurationProvider.js';
 export { getWorkOS } from './core/client/workos.js';
 
 // ============================================
+// Errors
+// ============================================
+export {
+  AuthKitError,
+  SessionEncryptionError,
+  TokenValidationError,
+  TokenRefreshError,
+} from './core/errors.js';
+
+// ============================================
 // Type Exports
 // ============================================
 export * from './core/session/types.js';
