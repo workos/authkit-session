@@ -36,7 +36,6 @@
   },
   "dependencies": {
     "@workos-inc/node": "^8.0.0-rc.3",
-    "iron-session": "^8.0.4",
     "iron-webcrypto": "^1.2.1",
     "jose": "^6.1.2"
   },
