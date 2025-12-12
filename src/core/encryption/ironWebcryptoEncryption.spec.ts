@@ -3,7 +3,6 @@ import {
   unsealData as ironSessionUnseal,
 } from 'iron-session';
 import { SessionEncryption } from './ironWebcryptoEncryption.js';
-import ironSessionEncryption from './ironSessionEncryption.js';
 
 const testPassword = 'this-is-a-test-password-that-is-32-characters-long!';
 const testData = {
@@ -101,29 +100,4 @@ describe('ironWebcryptoEncryption', () => {
     });
   });
 
-  describe('compatibility with ironSessionEncryption export', () => {
-    it('can unseal data sealed by ironSessionEncryption', async () => {
-      const sealed = await ironSessionEncryption.sealData(testData, {
-        password: testPassword,
-      });
-
-      const unsealed = await encryption.unsealData(sealed, {
-        password: testPassword,
-      });
-
-      expect(unsealed).toEqual(testData);
-    });
-
-    it('produces data that ironSessionEncryption can unseal', async () => {
-      const sealed = await encryption.sealData(testData, {
-        password: testPassword,
-      });
-
-      const unsealed = await ironSessionEncryption.unsealData(sealed, {
-        password: testPassword,
-      });
-
-      expect(unsealed).toEqual(testData);
-    });
-  });
 });
