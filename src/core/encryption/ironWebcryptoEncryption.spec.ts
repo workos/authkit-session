@@ -99,5 +99,4 @@ describe('ironWebcryptoEncryption', () => {
       ).rejects.toThrow();
     });
   });
-
 });
