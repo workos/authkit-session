@@ -13,9 +13,10 @@ export interface CookieOptions {
   partitioned?: boolean;
 }
 
-export abstract class CookieSessionStorage<TRequest, TResponse>
-  implements SessionStorage<TRequest, TResponse>
-{
+export abstract class CookieSessionStorage<
+  TRequest,
+  TResponse,
+> implements SessionStorage<TRequest, TResponse> {
   protected cookieName: string;
   protected readonly cookieOptions: CookieOptions;
 

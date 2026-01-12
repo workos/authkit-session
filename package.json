@@ -29,13 +29,13 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.17.0",
-    "@vitest/coverage-v8": "^4.0.10",
-    "prettier": "^3.6.2",
+    "@vitest/coverage-v8": "^4.0.17",
+    "prettier": "^3.7.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.10"
+    "vitest": "^4.0.17"
   },
   "dependencies": {
-    "@workos-inc/node": "8.0.0-rc.5",
+    "@workos-inc/node": "8.0.0",
     "iron-webcrypto": "^2.0.0",
     "jose": "^6.1.3"
   },
