@@ -50,21 +50,18 @@ export interface AuthenticateWithOptionsBase {
   };
 }
 
-export interface AuthenticateWithRefreshTokenOptions
-  extends AuthenticateWithOptionsBase {
+export interface AuthenticateWithRefreshTokenOptions extends AuthenticateWithOptionsBase {
   refreshToken: string;
   organizationId?: string;
 }
 
-export interface AuthenticateWithCodeOptions
-  extends AuthenticateWithOptionsBase {
+export interface AuthenticateWithCodeOptions extends AuthenticateWithOptionsBase {
   codeVerifier?: string;
   code: string;
   invitationToken?: string;
 }
 
-export interface AuthenticateWithEmailVerificationOptions
-  extends AuthenticateWithOptionsBase {
+export interface AuthenticateWithEmailVerificationOptions extends AuthenticateWithOptionsBase {
   code: string;
   pendingAuthenticationToken: string;
 }
