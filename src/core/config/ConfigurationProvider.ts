@@ -1,4 +1,4 @@
-import type { AuthKitConfig, ValueSource } from './types.js';
+import type { AuthKitConfig, SessionEncoding, ValueSource } from './types.js';
 
 /**
  * Default environment variable source that uses process.env
@@ -29,6 +29,10 @@ export class ConfigurationProvider {
     // act as the actual time-limited aspects of the session.
     cookieMaxAge: 60 * 60 * 24 * 400,
     apiHostname: 'api.workos.com',
+    sessionEncoding: { read: 'sealed', write: 'sealed' },
+    // cookiePassword is listed here so it always appears in allKeys in getConfig().
+    // The actual value comes from env vars or programmatic configuration.
+    cookiePassword: undefined,
   };
 
   private valueSource: ValueSource = defaultSource;
@@ -37,7 +41,7 @@ export class ConfigurationProvider {
     'clientId',
     'apiKey',
     'redirectUri',
-    'cookiePassword',
+    // cookiePassword is validated conditionally in validate() based on sessionEncoding
   ];
 
   /**
@@ -71,7 +75,32 @@ export class ConfigurationProvider {
     }
   }
 
+  /**
+   * Resolve sessionEncoding by merging programmatic config with env vars.
+   * Env vars WORKOS_SESSION_ENCODING_READ and WORKOS_SESSION_ENCODING_WRITE override config.
+   */
+  private resolveSessionEncoding(): SessionEncoding {
+    const configValue = this.config.sessionEncoding ?? {
+      read: 'sealed' as const,
+      write: 'sealed' as const,
+    };
+    const readEnv = this.getEnvironmentValue('WORKOS_SESSION_ENCODING_READ');
+    const writeEnv = this.getEnvironmentValue('WORKOS_SESSION_ENCODING_WRITE');
+    if (!readEnv && !writeEnv) {
+      return configValue;
+    }
+    return {
+      read: (readEnv ?? configValue.read) as SessionEncoding['read'],
+      write: (writeEnv ?? configValue.write) as SessionEncoding['write'],
+    };
+  }
+
   getValue<K extends keyof AuthKitConfig>(key: K): AuthKitConfig[K] {
+    // sessionEncoding is resolved via dedicated env vars, not the standard mapping
+    if (key === 'sessionEncoding') {
+      return this.resolveSessionEncoding() as AuthKitConfig[K];
+    }
+
     const envKey = this.getEnvironmentVariableName(key);
     const envValue = this.getEnvironmentValue(envKey);
 
@@ -155,12 +184,25 @@ export class ConfigurationProvider {
 
       if (!value) {
         errors.push(`${envKey} is required`);
-      } else if (key === 'cookiePassword') {
-        // Special validation for cookiePassword length
+      }
+    }
+
+    // Validate cookiePassword conditionally — not needed for fully unsealed encoding
+    const encoding = this.resolveSessionEncoding();
+    const needsPassword = !(
+      encoding.read === 'unsealed' && encoding.write === 'unsealed'
+    );
+    if (needsPassword) {
+      const envValue = this.getEnvironmentValue('WORKOS_COOKIE_PASSWORD');
+      const configValue = this.config.cookiePassword;
+      const value = envValue ?? configValue;
+      if (!value) {
+        errors.push('WORKOS_COOKIE_PASSWORD is required');
+      } else {
         const password = String(value);
         if (password.length < 32) {
           errors.push(
-            `${envKey} must be at least 32 characters (currently ${password.length})`,
+            `WORKOS_COOKIE_PASSWORD must be at least 32 characters (currently ${password.length})`,
           );
         }
       }

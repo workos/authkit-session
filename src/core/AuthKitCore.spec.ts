@@ -143,7 +143,7 @@ describe('AuthKitCore', () => {
   });
 
   describe('encryptSession()', () => {
-    it('encrypts session data', async () => {
+    it('encrypts session data (sealed, default)', async () => {
       const session = {
         accessToken: 'test-token',
         refreshToken: 'test-refresh',
@@ -178,10 +178,53 @@ describe('AuthKitCore', () => {
         }),
       ).rejects.toThrow(SessionEncryptionError);
     });
+
+    it('write:unsealed produces base64url JSON', async () => {
+      const unsealed = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'sealed', write: 'unsealed' },
+        } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+      const session = {
+        accessToken: 'tok',
+        refreshToken: 'ref',
+        user: mockUser,
+        impersonator: undefined,
+      };
+
+      const result = await unsealed.encryptSession(session);
+
+      // Must be valid base64url (no +, /, =) and decodable as JSON
+      expect(result).not.toContain('+');
+      expect(result).not.toContain('/');
+      expect(result).not.toContain('=');
+      const decoded = JSON.parse(Buffer.from(result, 'base64url').toString());
+      expect(decoded.accessToken).toBe('tok');
+    });
+
+    it('write:sealed without cookiePassword throws SessionEncryptionError', async () => {
+      const noPwCore = new AuthKitCore(
+        { ...mockConfig, cookiePassword: undefined } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+
+      await expect(
+        noPwCore.encryptSession({
+          accessToken: 'tok',
+          refreshToken: 'ref',
+          user: mockUser,
+          impersonator: undefined,
+        }),
+      ).rejects.toThrow(SessionEncryptionError);
+    });
   });
 
   describe('decryptSession()', () => {
-    it('decrypts session data', async () => {
+    it('decrypts sealed session data (default)', async () => {
       const result = await core.decryptSession('encrypted-data');
 
       expect(result.accessToken).toBe('test-access-token');
@@ -202,6 +245,124 @@ describe('AuthKitCore', () => {
       );
 
       await expect(failingCore.decryptSession('bad-data')).rejects.toThrow(
+        SessionEncryptionError,
+      );
+    });
+
+    it('read:unsealed decodes base64url JSON session', async () => {
+      const session = {
+        accessToken: 'tok',
+        refreshToken: 'ref',
+        user: mockUser,
+        impersonator: undefined,
+      };
+      const encoded = Buffer.from(JSON.stringify(session)).toString(
+        'base64url',
+      );
+
+      const unsealedCore = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'unsealed', write: 'unsealed' },
+        } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+
+      const result = await unsealedCore.decryptSession(encoded);
+      expect(result.accessToken).toBe('tok');
+      expect(result.refreshToken).toBe('ref');
+    });
+
+    it('read:unsealed throws on invalid base64url', async () => {
+      const unsealedCore = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'unsealed', write: 'unsealed' },
+        } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+
+      await expect(
+        unsealedCore.decryptSession('not-valid-json!!!'),
+      ).rejects.toThrow(SessionEncryptionError);
+    });
+
+    it('read:both falls through to unsealed when sealed fails', async () => {
+      const session = {
+        accessToken: 'tok',
+        refreshToken: 'ref',
+        user: mockUser,
+        impersonator: undefined,
+      };
+      const encoded = Buffer.from(JSON.stringify(session)).toString(
+        'base64url',
+      );
+
+      const failingEncryption = {
+        sealData: async () => 'sealed',
+        unsealData: async () => {
+          throw new Error('not sealed');
+        },
+      };
+      const bothCore = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'both', write: 'unsealed' },
+        } as any,
+        mockClient as any,
+        failingEncryption as any,
+      );
+
+      const result = await bothCore.decryptSession(encoded);
+      expect(result.accessToken).toBe('tok');
+    });
+
+    it('read:both uses sealed when sealed succeeds', async () => {
+      const bothCore = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'both', write: 'sealed' },
+        } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+
+      // mockEncryption.unsealData returns test-access-token
+      const result = await bothCore.decryptSession('some-sealed-data');
+      expect(result.accessToken).toBe('test-access-token');
+    });
+
+    it('read:both throws when both formats fail', async () => {
+      const failingEncryption = {
+        sealData: async () => 'sealed',
+        unsealData: async () => {
+          throw new Error('not sealed');
+        },
+      };
+      const bothCore = new AuthKitCore(
+        {
+          ...mockConfig,
+          sessionEncoding: { read: 'both', write: 'unsealed' },
+        } as any,
+        mockClient as any,
+        failingEncryption as any,
+      );
+
+      await expect(
+        bothCore.decryptSession('not-valid-b64-json!!!'),
+      ).rejects.toThrow(SessionEncryptionError);
+    });
+
+    it('read:sealed without cookiePassword throws SessionEncryptionError', async () => {
+      const noPwCore = new AuthKitCore(
+        { ...mockConfig, cookiePassword: undefined } as any,
+        mockClient as any,
+        mockEncryption as any,
+      );
+
+      await expect(noPwCore.decryptSession('some-data')).rejects.toThrow(
         SessionEncryptionError,
       );
     });

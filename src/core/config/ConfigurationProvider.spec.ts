@@ -118,6 +118,75 @@ describe('ConfigurationProvider', () => {
       const config = provider.getConfig();
       expect(config.cookieName).toBe('test-cookie');
     });
+
+    it('includes cookiePassword from env var', () => {
+      const password = 'a'.repeat(32);
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_COOKIE_PASSWORD') return password;
+        if (key === 'WORKOS_CLIENT_ID') return 'c';
+        if (key === 'WORKOS_API_KEY') return 'k';
+        if (key === 'WORKOS_REDIRECT_URI') return 'http://localhost/cb';
+        return undefined;
+      });
+      provider.configure(source);
+
+      const config = provider.getConfig();
+      expect(config.cookiePassword).toBe(password);
+    });
+  });
+
+  describe('sessionEncoding', () => {
+    it('defaults to sealed/sealed', () => {
+      const encoding = provider.getValue('sessionEncoding');
+      expect(encoding).toEqual({ read: 'sealed', write: 'sealed' });
+    });
+
+    it('can be set programmatically', () => {
+      provider.configure({
+        sessionEncoding: { read: 'both', write: 'unsealed' },
+      });
+      expect(provider.getValue('sessionEncoding')).toEqual({
+        read: 'both',
+        write: 'unsealed',
+      });
+    });
+
+    it('reads from WORKOS_SESSION_ENCODING_READ env var', () => {
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_SESSION_ENCODING_READ') return 'both';
+        return undefined;
+      });
+      provider.configure(source);
+
+      const encoding = provider.getValue('sessionEncoding')!;
+      expect(encoding.read).toBe('both');
+      expect(encoding.write).toBe('sealed'); // default
+    });
+
+    it('reads from WORKOS_SESSION_ENCODING_WRITE env var', () => {
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_SESSION_ENCODING_WRITE') return 'unsealed';
+        return undefined;
+      });
+      provider.configure(source);
+
+      const encoding = provider.getValue('sessionEncoding')!;
+      expect(encoding.read).toBe('sealed'); // default
+      expect(encoding.write).toBe('unsealed');
+    });
+
+    it('env vars override programmatic config', () => {
+      provider.configure({
+        sessionEncoding: { read: 'unsealed', write: 'unsealed' },
+      });
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_SESSION_ENCODING_READ') return 'both';
+        return undefined;
+      });
+      provider.configure(source);
+
+      expect(provider.getValue('sessionEncoding')!.read).toBe('both');
+    });
   });
 
   describe('validate()', () => {
@@ -197,6 +266,32 @@ describe('ConfigurationProvider', () => {
       provider.configure(source);
 
       expect(() => provider.validate()).not.toThrow();
+    });
+
+    it('does not require cookiePassword when encoding is fully unsealed', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        sessionEncoding: { read: 'unsealed', write: 'unsealed' },
+        // no cookiePassword
+      });
+
+      expect(() => provider.validate()).not.toThrow();
+    });
+
+    it('still requires cookiePassword when read:both (sealed fallback needed)', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        sessionEncoding: { read: 'both', write: 'unsealed' },
+        // no cookiePassword
+      });
+
+      expect(() => provider.validate()).toThrow(
+        /WORKOS_COOKIE_PASSWORD is required/,
+      );
     });
   });
 });

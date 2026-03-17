@@ -1,4 +1,18 @@
 /**
+ * Session encoding configuration for gradual migration between sealed and unsealed formats.
+ *
+ * - `read: 'sealed'` — only accept iron-encrypted cookies (default)
+ * - `read: 'unsealed'` — only accept base64url JSON cookies
+ * - `read: 'both'` — try sealed first, fall back to unsealed (migration phase)
+ * - `write: 'sealed'` — write iron-encrypted cookies (default)
+ * - `write: 'unsealed'` — write base64url JSON cookies
+ */
+export interface SessionEncoding {
+  read: 'sealed' | 'unsealed' | 'both';
+  write: 'sealed' | 'unsealed';
+}
+
+/**
  * AuthKit Configuration Options
  */
 export interface AuthKitConfig {
@@ -23,9 +37,10 @@ export interface AuthKitConfig {
   /**
    * The password used to encrypt the session cookie
    * Equivalent to the WORKOS_COOKIE_PASSWORD environment variable
-   * Must be at least 32 characters long
+   * Must be at least 32 characters long.
+   * Not required when sessionEncoding is fully unsealed ({ read: 'unsealed', write: 'unsealed' }).
    */
-  cookiePassword: string;
+  cookiePassword?: string;
 
   /**
    * The hostname of the API to use
@@ -67,6 +82,17 @@ export interface AuthKitConfig {
    * The domain for the session cookie
    */
   cookieDomain?: string;
+
+  /**
+   * Session encoding configuration.
+   * Controls whether sessions are sealed (iron-encrypted) or unsealed (base64url JSON).
+   * Use to migrate between formats without breaking existing sessions.
+   *
+   * Defaults to { read: 'sealed', write: 'sealed' } for backward compatibility.
+   *
+   * Environment variables: WORKOS_SESSION_ENCODING_READ, WORKOS_SESSION_ENCODING_WRITE
+   */
+  sessionEncoding?: SessionEncoding;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

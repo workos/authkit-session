@@ -10,6 +10,16 @@ import type {
   SessionEncryption,
 } from './session/types.js';
 
+function encodeUnsealed(session: Session): string {
+  return Buffer.from(JSON.stringify(session)).toString('base64url');
+}
+
+function decodeUnsealed(encoded: string): Session {
+  return JSON.parse(
+    Buffer.from(encoded, 'base64url').toString('utf-8'),
+  ) as Session;
+}
+
 /**
  * AuthKitCore provides pure business logic for authentication operations.
  *
@@ -111,37 +121,89 @@ export class AuthKitCore {
 
   /**
    * Encrypt a session object into a string suitable for cookie storage.
+   * Respects sessionEncoding.write config: 'sealed' (default) or 'unsealed'.
    *
    * @param session - The session to encrypt
-   * @returns Encrypted session string
+   * @returns Sealed or base64url-encoded session string
    * @throws SessionEncryptionError if encryption fails
    */
   async encryptSession(session: Session): Promise<string> {
+    const { write } = this.config.sessionEncoding ?? { write: 'sealed' };
+
+    if (write === 'unsealed') {
+      return encodeUnsealed(session);
+    }
+
+    // write === 'sealed'
+    if (!this.config.cookiePassword) {
+      throw new SessionEncryptionError(
+        'cookiePassword is required for sealed sessions',
+      );
+    }
     try {
-      const encryptedSession = await this.encryption.sealData(session, {
+      return await this.encryption.sealData(session, {
         password: this.config.cookiePassword,
         ttl: 0,
       });
-      return encryptedSession;
     } catch (error) {
       throw new SessionEncryptionError('Failed to encrypt session', error);
     }
   }
 
   /**
-   * Decrypt an encrypted session string back into a session object.
+   * Decrypt a session string back into a session object.
+   * Respects sessionEncoding.read config:
+   * - 'sealed' (default): iron-unseal only
+   * - 'unsealed': base64url decode only
+   * - 'both': try sealed first, fall back to unsealed
    *
-   * @param encryptedSession - The encrypted session string
+   * @param encryptedSession - The sealed or base64url-encoded session string
    * @returns Decrypted session object
    * @throws SessionEncryptionError if decryption fails
    */
   async decryptSession(encryptedSession: string): Promise<Session> {
-    try {
-      const session = await this.encryption.unsealData<Session>(
-        encryptedSession,
-        { password: this.config.cookiePassword },
+    const { read } = this.config.sessionEncoding ?? { read: 'sealed' };
+
+    if (read === 'unsealed') {
+      try {
+        return decodeUnsealed(encryptedSession);
+      } catch (error) {
+        throw new SessionEncryptionError(
+          'Failed to decode unsealed session',
+          error,
+        );
+      }
+    }
+
+    if (read === 'both') {
+      try {
+        return await this.unsealSession(encryptedSession);
+      } catch {
+        try {
+          return decodeUnsealed(encryptedSession);
+        } catch (error) {
+          throw new SessionEncryptionError(
+            'Failed to decode session in both sealed and unsealed modes',
+            error,
+          );
+        }
+      }
+    }
+
+    // read === 'sealed' (default)
+    return this.unsealSession(encryptedSession);
+  }
+
+  private async unsealSession(encryptedSession: string): Promise<Session> {
+    if (!this.config.cookiePassword) {
+      throw new SessionEncryptionError(
+        'cookiePassword is required for sealed sessions',
       );
-      return session;
+    }
+    try {
+      return await this.encryption.unsealData<Session>(encryptedSession, {
+        password: this.config.cookiePassword,
+      });
     } catch (error) {
       throw new SessionEncryptionError('Failed to decrypt session', error);
     }
