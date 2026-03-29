@@ -3,3 +3,6 @@ dist/
 package-lock.json
 coverage/
 .idea
+
+# Case harness markers (auto-added by bootstrap)
+.case/

@@ -32,8 +32,8 @@ export class TokenManager {
   ): BaseTokenClaims & TCustomClaims {
     try {
       return decodeJwt<BaseTokenClaims & TCustomClaims>(token);
-    } catch (error) {
-      throw new Error('Invalid token');
+    } catch (cause) {
+      throw new Error('Invalid token', { cause });
     }
   }
 

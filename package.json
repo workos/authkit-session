@@ -2,6 +2,18 @@
   "name": "@workos/authkit-session",
   "version": "0.3.4",
   "description": "Framework-agnostic authentication library for WorkOS with pluggable storage adapters",
+  "keywords": [],
+  "license": "MIT",
+  "author": "WorkOS",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/workos/authkit-session.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,38 +29,28 @@
     "rebuild": "pnpm run clean && pnpm run build",
     "dev": "tsc -p tsconfig.build.json --watch",
     "prepack": "npm run rebuild",
-    "prettier": "prettier --check .",
-    "format": "prettier --write .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest --run",
     "test:coverage": "vitest --run --coverage",
     "test:watch": "vitest --watch"
-  },
-  "keywords": [],
-  "author": "WorkOS",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/workos/authkit-session.git"
-  },
-  "devDependencies": {
-    "@types/node": "^20.17.0",
-    "@vitest/coverage-v8": "^4.0.17",
-    "prettier": "^3.7.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
   },
   "dependencies": {
     "@workos-inc/node": "8.0.0",
     "iron-webcrypto": "^2.0.0",
     "jose": "^6.1.3"
   },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@vitest/coverage-v8": "^4.0.17",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "files": [
-    "dist",
-    "src",
-    "README.md"
-  ]
+  }
 }
