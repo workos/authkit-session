@@ -70,10 +70,9 @@ export class AuthService<TRequest, TResponse> {
         return { auth: { user: null } };
       }
 
-      const { claims, session, refreshed } =
-        await this.core.validateAndRefresh<TCustomClaims>(
-          await this.core.decryptSession(encryptedSession),
-        );
+      const { claims, session, refreshed } = await this.core.validateAndRefresh<TCustomClaims>(
+        await this.core.decryptSession(encryptedSession),
+      );
 
       const auth: AuthResult<TCustomClaims> = {
         refreshToken: session.refreshToken,
@@ -135,9 +134,7 @@ export class AuthService<TRequest, TResponse> {
    * @param response - Framework-specific response object
    * @returns Updated response and/or headers
    */
-  async clearSession(
-    response: TResponse,
-  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+  async clearSession(response: TResponse): Promise<{ response?: TResponse; headers?: HeadersBag }> {
     return this.storage.clearSession(response);
   }
 
@@ -188,18 +185,14 @@ export class AuthService<TRequest, TResponse> {
   /**
    * Convenience: Get sign-in URL.
    */
-  async getSignInUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
+  async getSignInUrl(options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {}) {
     return this.operations.getSignInUrl(options);
   }
 
   /**
    * Convenience: Get sign-up URL.
    */
-  async getSignUpUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
+  async getSignUpUrl(options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {}) {
     return this.operations.getSignUpUrl(options);
   }
 
@@ -220,11 +213,7 @@ export class AuthService<TRequest, TResponse> {
    * @param options - OAuth callback options (code, state)
    * @returns Updated response, return pathname, and auth response
    */
-  async handleCallback(
-    _request: TRequest,
-    response: TResponse,
-    options: { code: string; state?: string },
-  ) {
+  async handleCallback(_request: TRequest, response: TResponse, options: { code: string; state?: string }) {
     // Authenticate with WorkOS using the OAuth code
     const authResponse = await this.client.userManagement.authenticateWithCode({
       code: options.code,
@@ -240,10 +229,7 @@ export class AuthService<TRequest, TResponse> {
     };
 
     const encryptedSession = await this.core.encryptSession(session);
-    const { response: updatedResponse, headers } = await this.saveSession(
-      response,
-      encryptedSession,
-    );
+    const { response: updatedResponse, headers } = await this.saveSession(response, encryptedSession);
 
     // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
     let returnPathname = '/';
@@ -255,9 +241,7 @@ export class AuthService<TRequest, TResponse> {
         customState = rest.join('.'); // Rejoin in case userState contains dots
         try {
           // Reverse URL-safe base64 encoding and decode
-          const decoded = (internal ?? '')
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
+          const decoded = (internal ?? '').replace(/-/g, '+').replace(/_/g, '/');
           const parsed = JSON.parse(atob(decoded));
           returnPathname = parsed.returnPathname || '/';
         } catch {

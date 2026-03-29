@@ -1,11 +1,7 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
-import type {
-  AuthResult,
-  GetAuthorizationUrlOptions,
-  Session,
-} from '../core/session/types.js';
+import type { AuthResult, GetAuthorizationUrlOptions, Session } from '../core/session/types.js';
 
 /**
  * AuthOperations provides high-level authentication operations.
@@ -86,10 +82,10 @@ export class AuthOperations {
     encryptedSession: string;
   }> {
     // Force refresh via core, optionally switching organizations
-    const { session: newSession, claims } = await this.core.validateAndRefresh(
-      session,
-      { force: true, organizationId },
-    );
+    const { session: newSession, claims } = await this.core.validateAndRefresh(session, {
+      force: true,
+      organizationId,
+    });
 
     const encryptedSession = await this.core.encryptSession(newSession);
 
@@ -124,9 +120,7 @@ export class AuthOperations {
    * @param options - Authorization URL options (returnPathname, screenHint, state, etc.)
    * @returns The authorization URL
    */
-  async getAuthorizationUrl(
-    options: GetAuthorizationUrlOptions = {},
-  ): Promise<string> {
+  async getAuthorizationUrl(options: GetAuthorizationUrlOptions = {}): Promise<string> {
     // Build the combined state parameter (matches authkit-nextjs format)
     const internalState = options.returnPathname
       ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
@@ -156,9 +150,7 @@ export class AuthOperations {
   /**
    * Convenience method: Get sign-in URL.
    */
-  async getSignInUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
+  async getSignInUrl(options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {}): Promise<string> {
     return this.getAuthorizationUrl({
       ...options,
       screenHint: 'sign-in',
@@ -168,9 +160,7 @@ export class AuthOperations {
   /**
    * Convenience method: Get sign-up URL.
    */
-  async getSignUpUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
+  async getSignUpUrl(options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {}): Promise<string> {
     return this.getAuthorizationUrl({
       ...options,
       screenHint: 'sign-up',

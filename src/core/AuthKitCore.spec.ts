@@ -48,11 +48,7 @@ describe('AuthKitCore', () => {
   let core: AuthKitCore;
 
   beforeEach(() => {
-    core = new AuthKitCore(
-      mockConfig as any,
-      mockClient as any,
-      mockEncryption as any,
-    );
+    core = new AuthKitCore(mockConfig as any, mockClient as any, mockEncryption as any);
   });
 
   describe('constructor', () => {
@@ -74,9 +70,7 @@ describe('AuthKitCore', () => {
     });
 
     it('throws error for invalid JWT', () => {
-      expect(() => core.parseTokenClaims('invalid-jwt')).toThrow(
-        'Invalid token',
-      );
+      expect(() => core.parseTokenClaims('invalid-jwt')).toThrow('Invalid token');
     });
 
     it('supports custom claims', () => {
@@ -119,8 +113,7 @@ describe('AuthKitCore', () => {
     });
 
     it('returns false when token has no expiry', () => {
-      const noExpiryJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
+      const noExpiryJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
 
       const result = core.isTokenExpiring(noExpiryJwt);
 
@@ -163,11 +156,7 @@ describe('AuthKitCore', () => {
         },
         unsealData: async () => ({}),
       };
-      const failingCore = new AuthKitCore(
-        mockConfig as any,
-        mockClient as any,
-        failingEncryption as any,
-      );
+      const failingCore = new AuthKitCore(mockConfig as any, mockClient as any, failingEncryption as any);
 
       await expect(
         failingCore.encryptSession({
@@ -195,15 +184,9 @@ describe('AuthKitCore', () => {
           throw new Error('Decryption failed');
         },
       };
-      const failingCore = new AuthKitCore(
-        mockConfig as any,
-        mockClient as any,
-        failingEncryption as any,
-      );
+      const failingCore = new AuthKitCore(mockConfig as any, mockClient as any, failingEncryption as any);
 
-      await expect(failingCore.decryptSession('bad-data')).rejects.toThrow(
-        SessionEncryptionError,
-      );
+      await expect(failingCore.decryptSession('bad-data')).rejects.toThrow(SessionEncryptionError);
     });
   });
 
@@ -228,11 +211,7 @@ describe('AuthKitCore', () => {
           }),
         },
       };
-      const testCore = new AuthKitCore(
-        mockConfig as any,
-        clientWithSpy as any,
-        mockEncryption as any,
-      );
+      const testCore = new AuthKitCore(mockConfig as any, clientWithSpy as any, mockEncryption as any);
 
       const result = await testCore.refreshTokens('refresh-token', 'org_123');
 
@@ -248,15 +227,9 @@ describe('AuthKitCore', () => {
           },
         },
       };
-      const failingCore = new AuthKitCore(
-        mockConfig as any,
-        failingClient as any,
-        mockEncryption as any,
-      );
+      const failingCore = new AuthKitCore(mockConfig as any, failingClient as any, mockEncryption as any);
 
-      await expect(failingCore.refreshTokens('bad-token')).rejects.toThrow(
-        TokenRefreshError,
-      );
+      await expect(failingCore.refreshTokens('bad-token')).rejects.toThrow(TokenRefreshError);
     });
   });
 });

@@ -17,8 +17,8 @@
     "rebuild": "pnpm run clean && pnpm run build",
     "dev": "tsc -p tsconfig.build.json --watch",
     "prepack": "npm run rebuild",
-    "prettier": "prettier --check .",
-    "format": "prettier --write .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest --run",
     "test:coverage": "vitest --run --coverage",
@@ -34,7 +34,7 @@
   "devDependencies": {
     "@types/node": "^20.17.0",
     "@vitest/coverage-v8": "^4.0.17",
-    "prettier": "^3.7.4",
+    "oxfmt": "^0.42.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },

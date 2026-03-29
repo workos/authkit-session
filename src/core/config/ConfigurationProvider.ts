@@ -6,8 +6,7 @@ import type { AuthKitConfig, ValueSource } from './types.js';
 const defaultSource: ValueSource = (key: string): string | undefined => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const processEnv: Record<string, string> | undefined = (globalThis as any)
-      ?.process?.env;
+    const processEnv: Record<string, string> | undefined = (globalThis as any)?.process?.env;
     return processEnv?.[key];
   } catch {
     return undefined;
@@ -33,12 +32,7 @@ export class ConfigurationProvider {
 
   private valueSource: ValueSource = defaultSource;
 
-  private readonly requiredKeys: (keyof AuthKitConfig)[] = [
-    'clientId',
-    'apiKey',
-    'redirectUri',
-    'cookiePassword',
-  ];
+  private readonly requiredKeys: (keyof AuthKitConfig)[] = ['clientId', 'apiKey', 'redirectUri', 'cookiePassword'];
 
   /**
    * Convert a camelCase string to an uppercase, underscore-separated environment variable name.
@@ -57,10 +51,7 @@ export class ConfigurationProvider {
     this.valueSource = source;
   }
 
-  configure(
-    configOrSource: Partial<AuthKitConfig> | ValueSource,
-    source?: ValueSource,
-  ): void {
+  configure(configOrSource: Partial<AuthKitConfig> | ValueSource, source?: ValueSource): void {
     if (typeof configOrSource === 'function') {
       this.setValueSource(configOrSource);
     } else if (typeof configOrSource === 'object' && !source) {
@@ -83,9 +74,7 @@ export class ConfigurationProvider {
     }
 
     if (this.requiredKeys.includes(key)) {
-      throw new Error(
-        `Missing required configuration value for ${key} (${envKey}).`,
-      );
+      throw new Error(`Missing required configuration value for ${key} (${envKey}).`);
     }
 
     return undefined as AuthKitConfig[K];
@@ -105,10 +94,7 @@ export class ConfigurationProvider {
     return undefined;
   }
 
-  private convertValueType<K extends keyof AuthKitConfig>(
-    key: K,
-    value: unknown,
-  ): AuthKitConfig[K] | undefined {
+  private convertValueType<K extends keyof AuthKitConfig>(key: K, value: unknown): AuthKitConfig[K] | undefined {
     if (typeof value !== 'string') {
       return value as AuthKitConfig[K];
     }
@@ -159,9 +145,7 @@ export class ConfigurationProvider {
         // Special validation for cookiePassword length
         const password = String(value);
         if (password.length < 32) {
-          errors.push(
-            `${envKey} must be at least 32 characters (currently ${password.length})`,
-          );
+          errors.push(`${envKey} must be at least 32 characters (currently ${password.length})`);
         }
       }
     }
@@ -169,7 +153,7 @@ export class ConfigurationProvider {
     if (errors.length > 0) {
       throw new Error(
         'AuthKit configuration error. Missing or invalid environment variables:\n\n' +
-          errors.map(e => `  • ${e}`).join('\n') +
+          errors.map((e) => `  • ${e}`).join('\n') +
           '\n\nSet these environment variables or call configure() with the required values.' +
           '\nGet your values from the WorkOS Dashboard: https://dashboard.workos.com',
       );

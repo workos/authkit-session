@@ -82,15 +82,9 @@ describe('ConfigurationProvider', () => {
 
   describe('getEnvironmentVariableName()', () => {
     it('converts camelCase to SCREAMING_SNAKE_CASE', () => {
-      expect(provider['getEnvironmentVariableName']('clientId')).toBe(
-        'WORKOS_CLIENT_ID',
-      );
-      expect(provider['getEnvironmentVariableName']('apiPort')).toBe(
-        'WORKOS_API_PORT',
-      );
-      expect(provider['getEnvironmentVariableName']('cookieMaxAge')).toBe(
-        'WORKOS_COOKIE_MAX_AGE',
-      );
+      expect(provider['getEnvironmentVariableName']('clientId')).toBe('WORKOS_CLIENT_ID');
+      expect(provider['getEnvironmentVariableName']('apiPort')).toBe('WORKOS_API_PORT');
+      expect(provider['getEnvironmentVariableName']('cookieMaxAge')).toBe('WORKOS_COOKIE_MAX_AGE');
     });
   });
 
@@ -180,9 +174,7 @@ describe('ConfigurationProvider', () => {
       const error = () => provider.validate();
       expect(error).toThrow(/WORKOS_API_KEY is required/);
       expect(error).toThrow(/WORKOS_REDIRECT_URI is required/);
-      expect(error).toThrow(
-        /WORKOS_COOKIE_PASSWORD must be at least 32 characters/,
-      );
+      expect(error).toThrow(/WORKOS_COOKIE_PASSWORD must be at least 32 characters/);
     });
 
     it('prefers environment values over config in validation', () => {
@@ -190,8 +182,7 @@ describe('ConfigurationProvider', () => {
         if (key === 'WORKOS_COOKIE_PASSWORD') return 'a'.repeat(32);
         if (key === 'WORKOS_CLIENT_ID') return 'env-client';
         if (key === 'WORKOS_API_KEY') return 'env-api-key';
-        if (key === 'WORKOS_REDIRECT_URI')
-          return 'http://localhost:3000/callback';
+        if (key === 'WORKOS_REDIRECT_URI') return 'http://localhost:3000/callback';
         return undefined;
       });
       provider.configure(source);

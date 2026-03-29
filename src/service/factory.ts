@@ -4,10 +4,7 @@ import { getFullConfig } from '../core/config.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getWorkOS } from '../core/client/workos.js';
 import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
-import type {
-  SessionEncryption,
-  SessionStorage,
-} from '../core/session/types.js';
+import type { SessionEncryption, SessionStorage } from '../core/session/types.js';
 import { AuthService } from './AuthService.js';
 
 /**
@@ -38,9 +35,7 @@ import { AuthService } from './AuthService.js';
  * ```
  */
 export function createAuthService<TRequest, TResponse>(options: {
-  sessionStorageFactory: (
-    config: AuthKitConfig,
-  ) => SessionStorage<TRequest, TResponse>;
+  sessionStorageFactory: (config: AuthKitConfig) => SessionStorage<TRequest, TResponse>;
   clientFactory?: (config: AuthKitConfig) => WorkOS;
   encryptionFactory?: (config: AuthKitConfig) => SessionEncryption;
 }): AuthService<TRequest, TResponse> {
@@ -62,21 +57,17 @@ export function createAuthService<TRequest, TResponse>(options: {
   // Return proxy that lazily delegates to the real service
   // This allows configure() to be called after createAuthService() but before first use
   return {
-    withAuth: request => getService().withAuth(request),
-    getSession: request => getService().getSession(request),
-    saveSession: (response, sessionData) =>
-      getService().saveSession(response, sessionData),
-    clearSession: response => getService().clearSession(response),
+    withAuth: (request) => getService().withAuth(request),
+    getSession: (request) => getService().getSession(request),
+    saveSession: (response, sessionData) => getService().saveSession(response, sessionData),
+    clearSession: (response) => getService().clearSession(response),
     signOut: (sessionId, opts) => getService().signOut(sessionId, opts),
-    switchOrganization: (session, organizationId) =>
-      getService().switchOrganization(session, organizationId),
-    refreshSession: (session, organizationId) =>
-      getService().refreshSession(session, organizationId),
-    getAuthorizationUrl: opts => getService().getAuthorizationUrl(opts),
-    getSignInUrl: opts => getService().getSignInUrl(opts),
-    getSignUpUrl: opts => getService().getSignUpUrl(opts),
+    switchOrganization: (session, organizationId) => getService().switchOrganization(session, organizationId),
+    refreshSession: (session, organizationId) => getService().refreshSession(session, organizationId),
+    getAuthorizationUrl: (opts) => getService().getAuthorizationUrl(opts),
+    getSignInUrl: (opts) => getService().getSignInUrl(opts),
+    getSignUpUrl: (opts) => getService().getSignUpUrl(opts),
     getWorkOS: () => getService().getWorkOS(),
-    handleCallback: (request, response, opts) =>
-      getService().handleCallback(request, response, opts),
+    handleCallback: (request, response, opts) => getService().handleCallback(request, response, opts),
   } as AuthService<TRequest, TResponse>;
 }

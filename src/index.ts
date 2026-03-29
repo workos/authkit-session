@@ -45,12 +45,7 @@ export { default as sessionEncryption } from './core/encryption/ironWebcryptoEnc
 // ============================================
 // Configuration
 // ============================================
-export {
-  configure,
-  getConfig,
-  getConfigurationProvider,
-  validateConfig,
-} from './core/config.js';
+export { configure, getConfig, getConfigurationProvider, validateConfig } from './core/config.js';
 export { ConfigurationProvider } from './core/config/ConfigurationProvider.js';
 
 // ============================================
@@ -61,22 +56,11 @@ export { getWorkOS } from './core/client/workos.js';
 // ============================================
 // Errors
 // ============================================
-export {
-  AuthKitError,
-  SessionEncryptionError,
-  TokenValidationError,
-  TokenRefreshError,
-} from './core/errors.js';
+export { AuthKitError, SessionEncryptionError, TokenValidationError, TokenRefreshError } from './core/errors.js';
 
 // ============================================
 // Type Exports
 // ============================================
 export * from './core/session/types.js';
 export * from './core/config/types.js';
-export type {
-  User,
-  Impersonator,
-  Organization,
-  WorkOS,
-  AuthenticationResponse,
-} from '@workos-inc/node';
+export type { User, Impersonator, Organization, WorkOS, AuthenticationResponse } from '@workos-inc/node';

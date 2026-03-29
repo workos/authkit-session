@@ -2,9 +2,7 @@ import { CookieSessionStorage } from './CookieSessionStorage.js';
 import type { AuthKitConfig } from '../config/types.js';
 
 // Mock config
-const createMockConfig = (
-  overrides: Partial<AuthKitConfig> = {},
-): AuthKitConfig => ({
+const createMockConfig = (overrides: Partial<AuthKitConfig> = {}): AuthKitConfig => ({
   clientId: 'test-client-id',
   apiKey: 'test-api-key',
   redirectUri: 'https://example.com/callback',

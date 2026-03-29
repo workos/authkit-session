@@ -5,9 +5,7 @@
  * @param fn - The function to be called once.
  * @returns A function that can only be called once.
  */
-export function once<TArgs extends unknown[], TReturn>(
-  fn: (...args: TArgs) => TReturn,
-): (...args: TArgs) => TReturn {
+export function once<TArgs extends unknown[], TReturn>(fn: (...args: TArgs) => TReturn): (...args: TArgs) => TReturn {
   let called = false;
   let result: TReturn;
 

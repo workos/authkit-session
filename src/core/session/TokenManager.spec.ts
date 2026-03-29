@@ -34,15 +34,11 @@ describe('TokenManager', () => {
     });
 
     it('throws error for invalid JWT', () => {
-      expect(() => tokenManager.parseTokenClaims('invalid-jwt')).toThrow(
-        'Invalid token',
-      );
+      expect(() => tokenManager.parseTokenClaims('invalid-jwt')).toThrow('Invalid token');
     });
 
     it('throws error for malformed JWT', () => {
-      expect(() => tokenManager.parseTokenClaims('not.a.jwt')).toThrow(
-        'Invalid token',
-      );
+      expect(() => tokenManager.parseTokenClaims('not.a.jwt')).toThrow('Invalid token');
     });
 
     it('supports custom claims', () => {
@@ -50,9 +46,7 @@ describe('TokenManager', () => {
       const customJwt =
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsImN1c3RvbUZpZWxkIjoiY3VzdG9tLXZhbHVlIn0.fake-signature';
 
-      const result = tokenManager.parseTokenClaims<{ customField: string }>(
-        customJwt,
-      );
+      const result = tokenManager.parseTokenClaims<{ customField: string }>(customJwt);
 
       expect(result.customField).toBe('custom-value');
     });
@@ -69,8 +63,7 @@ describe('TokenManager', () => {
     });
 
     it('returns null when token has no exp claim', () => {
-      const jwtWithoutExp =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
+      const jwtWithoutExp = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
 
       const result = tokenManager.getTokenExpiryTime(jwtWithoutExp);
 
@@ -107,8 +100,7 @@ describe('TokenManager', () => {
     });
 
     it('returns false when token has no expiry', () => {
-      const noExpiryJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
+      const noExpiryJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyJ9.fake-signature';
 
       const result = tokenManager.isTokenExpiring(noExpiryJwt);
 

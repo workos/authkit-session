@@ -27,11 +27,7 @@ export class TokenRefreshError extends AuthKitError {
   readonly userId?: string;
   readonly sessionId?: string;
 
-  constructor(
-    message: string,
-    cause?: unknown,
-    context?: { userId?: string; sessionId?: string },
-  ) {
+  constructor(message: string, cause?: unknown, context?: { userId?: string; sessionId?: string }) {
     super(message, cause);
     this.name = 'TokenRefreshError';
     this.userId = context?.userId;

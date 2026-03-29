@@ -13,9 +13,7 @@ export class TokenManager {
   }
 
   private readonly getPublicKey = once(() =>
-    createRemoteJWKSet(
-      new URL(this.client.userManagement.getJwksUrl(this.clientId)),
-    ),
+    createRemoteJWKSet(new URL(this.client.userManagement.getJwksUrl(this.clientId))),
   );
 
   async verifyToken(token: string): Promise<boolean> {
@@ -27,9 +25,7 @@ export class TokenManager {
     }
   }
 
-  parseTokenClaims<TCustomClaims = CustomClaims>(
-    token: string,
-  ): BaseTokenClaims & TCustomClaims {
+  parseTokenClaims<TCustomClaims = CustomClaims>(token: string): BaseTokenClaims & TCustomClaims {
     try {
       return decodeJwt<BaseTokenClaims & TCustomClaims>(token);
     } catch (error) {

@@ -8,14 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      exclude: [
-        'node_modules/',
-        'dist/',
-        'coverage/',
-        '**/*.spec.ts',
-        '**/*.test.ts',
-        'vitest.config.ts',
-      ],
+      exclude: ['node_modules/', 'dist/', 'coverage/', '**/*.spec.ts', '**/*.test.ts', 'vitest.config.ts'],
       include: ['src/**/*.ts'],
       thresholds: {
         global: {

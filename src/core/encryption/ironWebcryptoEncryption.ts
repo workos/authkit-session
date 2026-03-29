@@ -13,19 +13,13 @@ export class SessionEncryption implements SessionEncryptionInterface {
     sealWithoutVersion: string;
     tokenVersion: number | null;
   } {
-    const [sealWithoutVersion = '', tokenVersionAsString] = seal.split(
-      this.versionDelimiter,
-    );
-    const tokenVersion =
-      tokenVersionAsString == null ? null : parseInt(tokenVersionAsString, 10);
+    const [sealWithoutVersion = '', tokenVersionAsString] = seal.split(this.versionDelimiter);
+    const tokenVersion = tokenVersionAsString == null ? null : parseInt(tokenVersionAsString, 10);
     return { sealWithoutVersion, tokenVersion };
   }
 
   // Encrypt data in a way that's compatible with iron-session
-  async sealData(
-    data: unknown,
-    { password, ttl = 0 }: { password: string; ttl?: number | undefined },
-  ) {
+  async sealData(data: unknown, { password, ttl = 0 }: { password: string; ttl?: number | undefined }) {
     // Format password as iron-session expects
     const passwordObj = {
       id: '1',
@@ -56,10 +50,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
   }
 
   // Decrypt data from iron-session with HMAC verification
-  async unsealData<T = unknown>(
-    encryptedData: string,
-    { password }: { password: string },
-  ): Promise<T> {
+  async unsealData<T = unknown>(encryptedData: string, { password }: { password: string }): Promise<T> {
     // First, parse the seal to extract the version
     const { sealWithoutVersion, tokenVersion } = this.parseSeal(encryptedData);
 

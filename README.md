@@ -49,15 +49,9 @@ configure({
 ### 2. Create Storage Adapter
 
 ```typescript
-import {
-  CookieSessionStorage,
-  parseCookieHeader,
-} from '@workos/authkit-session';
+import { CookieSessionStorage, parseCookieHeader } from '@workos/authkit-session';
 
-export class MyFrameworkStorage extends CookieSessionStorage<
-  Request,
-  Response
-> {
+export class MyFrameworkStorage extends CookieSessionStorage<Request, Response> {
   async getSession(request: Request): Promise<string | null> {
     const cookieHeader = request.headers.get('cookie');
     if (!cookieHeader) return null;
@@ -94,7 +88,7 @@ export class MyFrameworkStorage extends CookieSessionStorage<
 import { createAuthService } from '@workos/authkit-session';
 
 export const authService = createAuthService({
-  sessionStorageFactory: config => new MyFrameworkStorage(config),
+  sessionStorageFactory: (config) => new MyFrameworkStorage(config),
 });
 ```
 
@@ -102,10 +96,8 @@ export const authService = createAuthService({
 
 ```typescript
 export const authMiddleware = () => {
-  return createMiddleware().server(async args => {
-    const { auth, refreshedSessionData } = await authService.withAuth(
-      args.request,
-    );
+  return createMiddleware().server(async (args) => {
+    const { auth, refreshedSessionData } = await authService.withAuth(args.request);
 
     const result = await args.next({
       context: { auth: () => auth },
@@ -113,10 +105,7 @@ export const authMiddleware = () => {
 
     // CRITICAL: Persist refreshed tokens to cookie
     if (refreshedSessionData) {
-      const { headers } = await authService.saveSession(
-        undefined,
-        refreshedSessionData,
-      );
+      const { headers } = await authService.saveSession(undefined, refreshedSessionData);
       if (headers?.['Set-Cookie']) {
         const newResponse = new Response(result.response.body, {
           status: result.response.status,
@@ -195,12 +184,7 @@ authService.getSignUpUrl(options)
 For maximum control, use the primitives directly:
 
 ```typescript
-import {
-  AuthKitCore,
-  AuthOperations,
-  getWorkOS,
-  getConfigurationProvider,
-} from '@workos/authkit-session';
+import { AuthKitCore, AuthOperations, getWorkOS, getConfigurationProvider } from '@workos/authkit-session';
 
 const config = getConfigurationProvider();
 const client = getWorkOS(config.getConfig());

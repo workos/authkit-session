@@ -35,14 +35,8 @@ export function configure(config: Partial<AuthKitConfig>): void;
  *   clientId: 'your-client-id',
  * }, env);
  */
-export function configure(
-  config: Partial<AuthKitConfig>,
-  source: ValueSource,
-): void;
-export function configure(
-  configOrSource: Partial<AuthKitConfig> | ValueSource,
-  source?: ValueSource,
-): void {
+export function configure(config: Partial<AuthKitConfig>, source: ValueSource): void;
+export function configure(configOrSource: Partial<AuthKitConfig> | ValueSource, source?: ValueSource): void {
   getConfigurationInstance().configure(configOrSource, source);
 }
 
@@ -54,9 +48,7 @@ export function configure(
  * @param key The configuration key
  * @returns The configuration value
  */
-export function getConfig<K extends keyof AuthKitConfig>(
-  key: K,
-): AuthKitConfig[K] {
+export function getConfig<K extends keyof AuthKitConfig>(key: K): AuthKitConfig[K] {
   return getConfigurationInstance().getValue(key);
 }
 

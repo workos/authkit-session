@@ -13,10 +13,7 @@ export interface CookieOptions {
   partitioned?: boolean;
 }
 
-export abstract class CookieSessionStorage<
-  TRequest,
-  TResponse,
-> implements SessionStorage<TRequest, TResponse> {
+export abstract class CookieSessionStorage<TRequest, TResponse> implements SessionStorage<TRequest, TResponse> {
   protected cookieName: string;
   protected readonly cookieOptions: CookieOptions;
 
@@ -63,8 +60,7 @@ export abstract class CookieSessionStorage<
     if (o.httpOnly) a.push('HttpOnly');
     if (o.secure) a.push('Secure');
     if (o.sameSite) {
-      const capitalizedSameSite =
-        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
+      const capitalizedSameSite = o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
       a.push(`SameSite=${capitalizedSameSite}`);
     }
     if (o.priority) a.push(`Priority=${o.priority}`);
@@ -83,9 +79,7 @@ export abstract class CookieSessionStorage<
     return mutated ?? { headers: { 'Set-Cookie': header } };
   }
 
-  async clearSession(
-    response: TResponse,
-  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+  async clearSession(response: TResponse): Promise<{ response?: TResponse; headers?: HeadersBag }> {
     const header = this.buildSetCookie('', true);
     const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
     return mutated ?? { headers: { 'Set-Cookie': header } };

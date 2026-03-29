@@ -45,9 +45,7 @@ describe('ironWebcryptoEncryption', () => {
       });
       const wrongPassword = 'wrong-password-that-is-32-chars!!';
 
-      await expect(
-        encryption.unsealData(sealed, { password: wrongPassword }),
-      ).rejects.toThrow();
+      await expect(encryption.unsealData(sealed, { password: wrongPassword })).rejects.toThrow();
     });
 
     it('unseals tokens without version suffix (v1 format)', async () => {

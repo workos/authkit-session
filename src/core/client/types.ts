@@ -1,12 +1,8 @@
 import type { User, Impersonator, WorkOS } from '@workos-inc/node';
 export interface UserManagementInterface {
   getAuthorizationUrl: (options: AuthorizationURLOptions) => string;
-  authenticateWithCode: (
-    options: AuthenticateWithCodeOptions,
-  ) => Promise<AuthenticationResponse>;
-  authenticateWithRefreshToken: (
-    options: AuthenticateWithRefreshTokenOptions,
-  ) => Promise<AuthenticationResponse>;
+  authenticateWithCode: (options: AuthenticateWithCodeOptions) => Promise<AuthenticationResponse>;
+  authenticateWithRefreshToken: (options: AuthenticateWithRefreshTokenOptions) => Promise<AuthenticationResponse>;
   getLogoutUrl: (options: { sessionId: string; returnTo?: string }) => string;
   revokeSession: (options: { sessionId: string }) => Promise<void>;
 }

@@ -3,12 +3,7 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
-import type {
-  BaseTokenClaims,
-  CustomClaims,
-  Session,
-  SessionEncryption,
-} from './session/types.js';
+import type { BaseTokenClaims, CustomClaims, Session, SessionEncryption } from './session/types.js';
 
 /**
  * AuthKitCore provides pure business logic for authentication operations.
@@ -29,11 +24,7 @@ export class AuthKitCore {
   private encryption: SessionEncryption;
   private clientId: string;
 
-  constructor(
-    config: AuthKitConfig,
-    client: WorkOS,
-    encryption: SessionEncryption,
-  ) {
+  constructor(config: AuthKitConfig, client: WorkOS, encryption: SessionEncryption) {
     this.config = config;
     this.client = client;
     this.encryption = encryption;
@@ -44,9 +35,7 @@ export class AuthKitCore {
    * JWKS public key fetcher - cached for performance
    */
   private readonly getPublicKey = once(() =>
-    createRemoteJWKSet(
-      new URL(this.client.userManagement.getJwksUrl(this.clientId)),
-    ),
+    createRemoteJWKSet(new URL(this.client.userManagement.getJwksUrl(this.clientId))),
   );
 
   /**
@@ -99,9 +88,7 @@ export class AuthKitCore {
    * @returns Decoded token claims
    * @throws Error if token is invalid
    */
-  parseTokenClaims<TCustomClaims = CustomClaims>(
-    token: string,
-  ): BaseTokenClaims & TCustomClaims {
+  parseTokenClaims<TCustomClaims = CustomClaims>(token: string): BaseTokenClaims & TCustomClaims {
     try {
       return decodeJwt<BaseTokenClaims & TCustomClaims>(token);
     } catch (error) {
@@ -137,10 +124,9 @@ export class AuthKitCore {
    */
   async decryptSession(encryptedSession: string): Promise<Session> {
     try {
-      const session = await this.encryption.unsealData<Session>(
-        encryptedSession,
-        { password: this.config.cookiePassword },
-      );
+      const session = await this.encryption.unsealData<Session>(encryptedSession, {
+        password: this.config.cookiePassword,
+      });
       return session;
     } catch (error) {
       throw new SessionEncryptionError('Failed to decrypt session', error);
@@ -167,12 +153,11 @@ export class AuthKitCore {
     impersonator: Impersonator | undefined;
   }> {
     try {
-      const result =
-        await this.client.userManagement.authenticateWithRefreshToken({
-          refreshToken,
-          clientId: this.clientId,
-          organizationId,
-        });
+      const result = await this.client.userManagement.authenticateWithRefreshToken({
+        refreshToken,
+        clientId: this.clientId,
+        organizationId,
+      });
 
       return {
         accessToken: result.accessToken,
@@ -236,14 +221,11 @@ export class AuthKitCore {
       // Token parsing failed - continue without session context
     }
 
-    const newSession = await this.refreshTokens(
-      session.refreshToken,
-      organizationId,
-      { userId: session.user?.id, sessionId },
-    );
-    const newClaims = this.parseTokenClaims<TCustomClaims>(
-      newSession.accessToken,
-    );
+    const newSession = await this.refreshTokens(session.refreshToken, organizationId, {
+      userId: session.user?.id,
+      sessionId,
+    });
+    const newClaims = this.parseTokenClaims<TCustomClaims>(newSession.accessToken);
     return {
       valid: true,
       refreshed: true,

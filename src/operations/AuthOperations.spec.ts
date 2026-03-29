@@ -55,11 +55,7 @@ describe('AuthOperations', () => {
   let operations: AuthOperations;
 
   beforeEach(() => {
-    operations = new AuthOperations(
-      mockCore as any,
-      mockClient as any,
-      mockConfig as any,
-    );
+    operations = new AuthOperations(mockCore as any, mockClient as any, mockConfig as any);
   });
 
   describe('constructor', () => {
@@ -146,11 +142,7 @@ describe('AuthOperations', () => {
         },
         encryptSession: async () => 'encrypted-session-data',
       };
-      const testOps = new AuthOperations(
-        coreWithSpy as any,
-        mockClient as any,
-        mockConfig as any,
-      );
+      const testOps = new AuthOperations(coreWithSpy as any, mockClient as any, mockConfig as any);
 
       const session = {
         accessToken: 'test-token',
@@ -191,11 +183,7 @@ describe('AuthOperations', () => {
         },
         encryptSession: async () => 'encrypted-session-data',
       };
-      const testOps = new AuthOperations(
-        coreWithSpy as any,
-        mockClient as any,
-        mockConfig as any,
-      );
+      const testOps = new AuthOperations(coreWithSpy as any, mockClient as any, mockConfig as any);
 
       const session = {
         accessToken: 'test-token',

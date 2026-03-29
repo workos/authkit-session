@@ -43,8 +43,7 @@ const mockClient = {
       user: mockUser,
       impersonator: undefined,
     }),
-    getLogoutUrl: ({ sessionId }: any) =>
-      `https://api.workos.com/sso/logout?session_id=${sessionId}`,
+    getLogoutUrl: ({ sessionId }: any) => `https://api.workos.com/sso/logout?session_id=${sessionId}`,
   },
 };
 
@@ -62,12 +61,7 @@ describe('AuthService', () => {
   let service: AuthService<any, any>;
 
   beforeEach(() => {
-    service = new AuthService(
-      mockConfig as any,
-      mockStorage as any,
-      mockClient as any,
-      mockEncryption as any,
-    );
+    service = new AuthService(mockConfig as any, mockStorage as any, mockClient as any, mockEncryption as any);
   });
 
   describe('constructor', () => {

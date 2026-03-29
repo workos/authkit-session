@@ -1,11 +1,5 @@
 import { vi } from 'vitest';
-import {
-  configure,
-  getConfig,
-  getConfigurationProvider,
-  getFullConfig,
-  validateConfig,
-} from './config.js';
+import { configure, getConfig, getConfigurationProvider, getFullConfig, validateConfig } from './config.js';
 import { ConfigurationProvider } from './config/ConfigurationProvider.js';
 
 describe('config', () => {
@@ -64,9 +58,7 @@ describe('config', () => {
     });
 
     it('throws for missing required config', () => {
-      expect(() => getConfig('clientId')).toThrow(
-        'Missing required configuration value for clientId',
-      );
+      expect(() => getConfig('clientId')).toThrow('Missing required configuration value for clientId');
     });
 
     it('returns defaults for optional config', () => {
@@ -77,10 +69,7 @@ describe('config', () => {
     it('prefers environment over config', () => {
       const envValue = 'env-client-id';
       const validPassword = 'a'.repeat(32);
-      configure(
-        { clientId: 'config-client-id', cookiePassword: validPassword },
-        () => envValue,
-      );
+      configure({ clientId: 'config-client-id', cookiePassword: validPassword }, () => envValue);
 
       expect(getConfig('clientId')).toBe(envValue);
     });
@@ -124,18 +113,14 @@ describe('config', () => {
     });
 
     it('throws with batch of missing fields', () => {
-      expect(() => validateConfig()).toThrow(
-        /AuthKit configuration error\. Missing or invalid environment variables/,
-      );
+      expect(() => validateConfig()).toThrow(/AuthKit configuration error\. Missing or invalid environment variables/);
     });
 
     it('shows all missing fields at once', () => {
       expect(() => validateConfig()).toThrow(/WORKOS_CLIENT_ID is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_API_KEY is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_REDIRECT_URI is required/);
-      expect(() => validateConfig()).toThrow(
-        /WORKOS_COOKIE_PASSWORD is required/,
-      );
+      expect(() => validateConfig()).toThrow(/WORKOS_COOKIE_PASSWORD is required/);
     });
 
     it('throws for short cookie password', () => {
@@ -146,9 +131,7 @@ describe('config', () => {
         cookiePassword: 'short',
       });
 
-      expect(() => validateConfig()).toThrow(
-        /WORKOS_COOKIE_PASSWORD must be at least 32 characters \(currently 5\)/,
-      );
+      expect(() => validateConfig()).toThrow(/WORKOS_COOKIE_PASSWORD must be at least 32 characters \(currently 5\)/);
     });
 
     it('includes dashboard link in error', () => {

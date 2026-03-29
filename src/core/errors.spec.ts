@@ -1,9 +1,4 @@
-import {
-  AuthKitError,
-  SessionEncryptionError,
-  TokenValidationError,
-  TokenRefreshError,
-} from './errors.js';
+import { AuthKitError, SessionEncryptionError, TokenValidationError, TokenRefreshError } from './errors.js';
 
 describe('AuthKitError', () => {
   it('creates error with message', () => {
@@ -50,10 +45,7 @@ describe('SessionEncryptionError', () => {
 
   it('creates error with cause', () => {
     const originalError = new Error('Crypto error');
-    const error = new SessionEncryptionError(
-      'Encryption failed',
-      originalError,
-    );
+    const error = new SessionEncryptionError('Encryption failed', originalError);
 
     expect(error.cause).toBe(originalError);
   });
@@ -168,7 +160,7 @@ describe('error inheritance', () => {
       new TokenRefreshError('test'),
     ];
 
-    errors.forEach(error => {
+    errors.forEach((error) => {
       expect(() => {
         throw error;
       }).toThrow(AuthKitError);

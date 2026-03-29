@@ -31,9 +31,9 @@ jobs:
         run: |
           pnpm install
 
-      - name: Prettier
+      - name: Format
         run: |
-          pnpm run prettier
+          pnpm run format:check
 
       # - name: Lint
       #   run: |
