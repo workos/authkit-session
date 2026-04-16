@@ -11,6 +11,7 @@ import type {
   SessionEncryption,
   SessionStorage,
 } from '../core/session/types.js';
+import { sanitizeReturnPathname } from '../utils.js';
 
 /**
  * Framework-agnostic authentication service.
@@ -245,8 +246,12 @@ export class AuthService<TRequest, TResponse> {
       encryptedSession,
     );
 
-    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
-    let returnPathname = '/';
+    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`.
+    // The returnPathname encoded in state is attacker-influenceable, so we
+    // always pass it through sanitizeReturnPathname before returning — this
+    // guarantees downstream consumers get a safe, origin-relative path and
+    // can't accidentally build an open-redirect (CWE-601).
+    let rawReturnPathname: unknown;
     let customState: string | undefined;
 
     if (options.state) {
@@ -259,7 +264,7 @@ export class AuthService<TRequest, TResponse> {
             .replace(/-/g, '+')
             .replace(/_/g, '/');
           const parsed = JSON.parse(atob(decoded));
-          returnPathname = parsed.returnPathname || '/';
+          rawReturnPathname = parsed.returnPathname;
         } catch {
           // Malformed internal state, use default
         }
@@ -267,7 +272,7 @@ export class AuthService<TRequest, TResponse> {
         try {
           const parsed = JSON.parse(atob(options.state));
           if (parsed.returnPathname) {
-            returnPathname = parsed.returnPathname;
+            rawReturnPathname = parsed.returnPathname;
           } else {
             customState = options.state;
           }
@@ -280,7 +285,7 @@ export class AuthService<TRequest, TResponse> {
     return {
       response: updatedResponse,
       headers,
-      returnPathname,
+      returnPathname: sanitizeReturnPathname(rawReturnPathname),
       state: customState,
       authResponse,
     };
