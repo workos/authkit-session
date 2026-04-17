@@ -259,4 +259,113 @@ describe('AuthKitCore', () => {
       );
     });
   });
+
+  describe('validateAndRefresh()', () => {
+    // Decodable JWT with sid + exp + org_id. Signature is garbage → verifyToken false.
+    const oldJwt =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fOTk5IiwiZXhwIjoxMDAwMDAwMDAwLCJvcmdfaWQiOiJvcmdfYWJjIn0.sig';
+    const newJwt =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
+
+    function makeRefreshClient(capture?: { opts?: any }) {
+      return {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async (opts: any) => {
+            if (capture) capture.opts = opts;
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+    }
+
+    it('forces refresh when token invalid and returns new session', async () => {
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        makeRefreshClient() as any,
+        mockEncryption as any,
+      );
+      const session = {
+        accessToken: oldJwt,
+        refreshToken: 'rt',
+        user: mockUser,
+        impersonator: undefined,
+      };
+
+      const result = await testCore.validateAndRefresh(session);
+
+      expect(result.refreshed).toBe(true);
+      expect(result.session.accessToken).toBe(newJwt);
+    });
+
+    it('propagates explicit organizationId into refresh', async () => {
+      const capture: { opts?: any } = {};
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        makeRefreshClient(capture) as any,
+        mockEncryption as any,
+      );
+
+      await testCore.validateAndRefresh(
+        {
+          accessToken: oldJwt,
+          refreshToken: 'rt',
+          user: mockUser,
+          impersonator: undefined,
+        },
+        { organizationId: 'org_explicit' },
+      );
+
+      expect(capture.opts?.organizationId).toBe('org_explicit');
+    });
+
+    it('continues when access token is unparseable', async () => {
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        makeRefreshClient() as any,
+        mockEncryption as any,
+      );
+      const session = {
+        accessToken: 'not-a-jwt',
+        refreshToken: 'rt',
+        user: mockUser,
+        impersonator: undefined,
+      };
+
+      const result = await testCore.validateAndRefresh(session);
+
+      expect(result.refreshed).toBe(true);
+    });
+  });
+
+  describe('verifyCallbackState()', () => {
+    it('throws OAuthStateMismatchError when stateFromUrl missing', async () => {
+      await expect(
+        core.verifyCallbackState({
+          stateFromUrl: undefined,
+          cookieValue: 'x',
+        }),
+      ).rejects.toMatchObject({ name: 'OAuthStateMismatchError' });
+    });
+
+    it('throws PKCECookieMissingError when cookie missing', async () => {
+      await expect(
+        core.verifyCallbackState({
+          stateFromUrl: 'x',
+          cookieValue: undefined,
+        }),
+      ).rejects.toMatchObject({ name: 'PKCECookieMissingError' });
+    });
+
+    it('throws OAuthStateMismatchError when values differ', async () => {
+      await expect(
+        core.verifyCallbackState({ stateFromUrl: 'a', cookieValue: 'b' }),
+      ).rejects.toMatchObject({ name: 'OAuthStateMismatchError' });
+    });
+  });
 });

@@ -174,7 +174,7 @@ Environment variables override programmatic config.
 ```typescript
 // Authentication
 authService.withAuth(request)                    // → { auth, refreshedSessionData? }
-authService.handleCallback(request, response, { code, state })
+authService.handleCallback(request, response, { code, state, cookieValue })
 authService.getSession(request)                  // → Session | null
 authService.saveSession(response, sessionData)   // → { response?, headers? }
 authService.clearSession(response)
@@ -184,11 +184,50 @@ authService.signOut(sessionId, { returnTo })     // → { logoutUrl, clearCookie
 authService.refreshSession(session, organizationId?)
 authService.switchOrganization(session, organizationId)
 
-// URL Generation
+// URL Generation — return { url, sealedState, cookieOptions }
 authService.getAuthorizationUrl(options)
 authService.getSignInUrl(options)
 authService.getSignUpUrl(options)
+
+// PKCE cookie helpers — so adapters never need to read config directly
+authService.getPKCECookieOptions(redirectUri?)     // → PKCECookieOptions
+authService.buildPKCEDeleteCookieHeader(redirectUri?)  // → Set-Cookie string
 ```
+
+### PKCE verifier cookie (`wos-auth-verifier`)
+
+This library binds every OAuth sign-in to a PKCE code verifier, so a leaked
+`state` value on its own cannot be used to complete a session hijack.
+
+The verifier is sealed into a single blob that serves two roles:
+
+1. It is sent to WorkOS as the OAuth `state` query parameter.
+2. It is set as a short-lived HTTP-only cookie (`wos-auth-verifier`, 10 min).
+
+On callback, the adapter passes BOTH channels to `handleCallback`:
+
+```typescript
+// Sign in: set the verifier cookie, redirect to `url`
+const { url, sealedState, cookieOptions } = await authService.getSignInUrl({
+  returnPathname: '/dashboard',
+});
+response.setHeader(
+  'Set-Cookie',
+  serializePKCESetCookie(cookieOptions, sealedState),
+);
+return redirect(url);
+
+// Callback: pass both channels; the library byte-compares before decrypting
+await authService.handleCallback(request, response, {
+  code,
+  state, // from URL
+  cookieValue: request.cookies.get('wos-auth-verifier'),
+});
+```
+
+Mismatched state and cookie raise `OAuthStateMismatchError`. A missing cookie
+(typical cause: Set-Cookie stripped by a proxy) raises
+`PKCECookieMissingError` with deployment guidance in the message.
 
 ### Direct Access (Advanced)
 
@@ -205,7 +244,7 @@ import {
 const config = getConfigurationProvider();
 const client = getWorkOS(config.getConfig());
 const core = new AuthKitCore(config, client, encryption);
-const operations = new AuthOperations(core, client, config);
+const operations = new AuthOperations(core, client, config, encryption);
 
 // Use core.validateAndRefresh(), core.encryptSession(), etc.
 ```

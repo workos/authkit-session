@@ -1,8 +1,15 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
-import { SessionEncryptionError, TokenRefreshError } from './errors.js';
+import {
+  OAuthStateMismatchError,
+  PKCECookieMissingError,
+  SessionEncryptionError,
+  TokenRefreshError,
+} from './errors.js';
+import { type PKCEState, unsealState } from './pkce/state.js';
 import type {
   BaseTokenClaims,
   CustomClaims,
@@ -145,6 +152,53 @@ export class AuthKitCore {
     } catch (error) {
       throw new SessionEncryptionError('Failed to decrypt session', error);
     }
+  }
+
+  /**
+   * Verify the OAuth callback state against the PKCE verifier cookie and
+   * return the unsealed state blob.
+   *
+   * Core owns encryption, so verification lives here rather than on
+   * AuthService. Byte-compares the query-string `state` against the cookie
+   * value BEFORE attempting to decrypt — smaller crypto attack surface and
+   * no decryption cost on obvious mismatches.
+   *
+   * @throws {OAuthStateMismatchError} state missing or does not match cookie
+   * @throws {PKCECookieMissingError} cookie not sent — typically a proxy or
+   *   Set-Cookie propagation issue on the adapter's callback path
+   * @throws {SessionEncryptionError} seal tampered, wrong password, TTL expired,
+   *   or schema mismatch on the unsealed payload
+   */
+  async verifyCallbackState(params: {
+    stateFromUrl: string | undefined;
+    cookieValue: string | undefined;
+  }): Promise<PKCEState> {
+    const { stateFromUrl, cookieValue } = params;
+
+    if (!stateFromUrl) {
+      throw new OAuthStateMismatchError(
+        'Missing state parameter from callback URL',
+      );
+    }
+    if (!cookieValue) {
+      throw new PKCECookieMissingError(
+        'PKCE verifier cookie missing — cannot verify OAuth state. Ensure Set-Cookie headers are propagated on redirects.',
+      );
+    }
+    const urlBytes = Buffer.from(stateFromUrl, 'utf8');
+    const cookieBytes = Buffer.from(cookieValue, 'utf8');
+    if (
+      urlBytes.length !== cookieBytes.length ||
+      !timingSafeEqual(urlBytes, cookieBytes)
+    ) {
+      throw new OAuthStateMismatchError('OAuth state mismatch');
+    }
+
+    return unsealState(
+      this.encryption,
+      this.config.cookiePassword,
+      cookieValue,
+    );
   }
 
   /**

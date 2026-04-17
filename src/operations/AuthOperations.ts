@@ -1,10 +1,13 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import { generateAuthorizationUrl } from '../core/pkce/generateAuthorizationUrl.js';
 import type {
   AuthResult,
   GetAuthorizationUrlOptions,
+  GetAuthorizationUrlResult,
   Session,
+  SessionEncryption,
 } from '../core/session/types.js';
 
 /**
@@ -23,11 +26,18 @@ export class AuthOperations {
   private core: AuthKitCore;
   private client: WorkOS;
   private config: AuthKitConfig;
+  private encryption: SessionEncryption;
 
-  constructor(core: AuthKitCore, client: WorkOS, config: AuthKitConfig) {
+  constructor(
+    core: AuthKitCore,
+    client: WorkOS,
+    config: AuthKitConfig,
+    encryption: SessionEncryption,
+  ) {
     this.core = core;
     this.client = client;
     this.config = config;
+    this.encryption = encryption;
   }
 
   /**
@@ -115,41 +125,23 @@ export class AuthOperations {
   }
 
   /**
-   * Get authorization URL for WorkOS authentication.
+   * Get a PKCE-bound WorkOS authorization URL.
    *
-   * State encoding format: `{internal}.{userState}` where internal is URL-safe
-   * base64 encoded JSON containing returnPathname. This allows customers to
-   * pass their own state through the OAuth flow.
+   * Returns the URL, the sealed state blob (to be used as both the cookie
+   * value and — already present in the URL — the OAuth `state` param), and
+   * the cookie options the adapter should apply when setting
+   * `wos-auth-verifier`.
    *
-   * @param options - Authorization URL options (returnPathname, screenHint, state, etc.)
-   * @returns The authorization URL
+   * @param options - returnPathname, screenHint, custom state, redirectUri, etc.
    */
   async getAuthorizationUrl(
     options: GetAuthorizationUrlOptions = {},
-  ): Promise<string> {
-    // Build the combined state parameter (matches authkit-nextjs format)
-    const internalState = options.returnPathname
-      ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-      : null;
-
-    // If both internal and custom state, combine as internal.custom
-    // Otherwise use whichever is provided
-    const state =
-      internalState && options.state
-        ? `${internalState}.${options.state}`
-        : internalState || options.state || undefined;
-
-    return this.client.userManagement.getAuthorizationUrl({
-      provider: 'authkit',
-      redirectUri: options.redirectUri ?? this.config.redirectUri,
-      screenHint: options.screenHint,
-      organizationId: options.organizationId,
-      loginHint: options.loginHint,
-      prompt: options.prompt,
-      clientId: this.config.clientId,
-      state,
+  ): Promise<GetAuthorizationUrlResult> {
+    return generateAuthorizationUrl({
+      client: this.client,
+      config: this.config,
+      encryption: this.encryption,
+      options,
     });
   }
 
@@ -158,7 +150,7 @@ export class AuthOperations {
    */
   async getSignInUrl(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
+  ): Promise<GetAuthorizationUrlResult> {
     return this.getAuthorizationUrl({
       ...options,
       screenHint: 'sign-in',
@@ -170,7 +162,7 @@ export class AuthOperations {
    */
   async getSignUpUrl(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
+  ): Promise<GetAuthorizationUrlResult> {
     return this.getAuthorizationUrl({
       ...options,
       screenHint: 'sign-up',

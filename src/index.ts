@@ -63,10 +63,21 @@ export { getWorkOS } from './core/client/workos.js';
 // ============================================
 export {
   AuthKitError,
+  OAuthStateMismatchError,
+  PKCECookieMissingError,
   SessionEncryptionError,
   TokenValidationError,
   TokenRefreshError,
 } from './core/errors.js';
+
+// ============================================
+// PKCE (adapter integration surface)
+// ============================================
+export { PKCE_COOKIE_NAME } from './core/pkce/constants.js';
+export {
+  getPKCECookieOptions,
+  serializePKCESetCookie,
+} from './core/pkce/cookieOptions.js';
 
 // ============================================
 // Type Exports

@@ -1,12 +1,18 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import {
+  getPKCECookieOptions,
+  serializePKCESetCookie,
+} from '../core/pkce/cookieOptions.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
   CustomClaims,
   GetAuthorizationUrlOptions,
+  GetAuthorizationUrlResult,
   HeadersBag,
+  PKCECookieOptions,
   Session,
   SessionEncryption,
   SessionStorage,
@@ -44,7 +50,7 @@ export class AuthService<TRequest, TResponse> {
     this.storage = storage;
     this.client = client;
     this.core = new AuthKitCore(config, client, encryption);
-    this.operations = new AuthOperations(this.core, client, config);
+    this.operations = new AuthOperations(this.core, client, config, encryption);
   }
 
   /**
@@ -181,7 +187,9 @@ export class AuthService<TRequest, TResponse> {
   /**
    * Get authorization URL - delegates to AuthOperations.
    */
-  async getAuthorizationUrl(options: GetAuthorizationUrlOptions = {}) {
+  async getAuthorizationUrl(
+    options: GetAuthorizationUrlOptions = {},
+  ): Promise<GetAuthorizationUrlResult> {
     return this.operations.getAuthorizationUrl(options);
   }
 
@@ -190,7 +198,7 @@ export class AuthService<TRequest, TResponse> {
    */
   async getSignInUrl(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
+  ): Promise<GetAuthorizationUrlResult> {
     return this.operations.getSignInUrl(options);
   }
 
@@ -199,8 +207,28 @@ export class AuthService<TRequest, TResponse> {
    */
   async getSignUpUrl(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
+  ): Promise<GetAuthorizationUrlResult> {
     return this.operations.getSignUpUrl(options);
+  }
+
+  /**
+   * Get PKCE verifier cookie options for the given redirect URI.
+   */
+  getPKCECookieOptions(redirectUri?: string): PKCECookieOptions {
+    return getPKCECookieOptions(this.config, redirectUri);
+  }
+
+  /**
+   * Build a ready-to-emit `Set-Cookie` header that deletes the
+   * `wos-auth-verifier` cookie. Adapters typically compute this once at the
+   * top of their callback handler and append it on every exit path.
+   */
+  buildPKCEDeleteCookieHeader(redirectUri?: string): string {
+    return serializePKCESetCookie(
+      getPKCECookieOptions(this.config, redirectUri),
+      '',
+      { expired: true },
+    );
   }
 
   /**
@@ -213,25 +241,35 @@ export class AuthService<TRequest, TResponse> {
 
   /**
    * Handle OAuth callback.
-   * This creates a new session after successful authentication.
    *
-   * @param request - Framework-specific request (not currently used)
-   * @param response - Framework-specific response
-   * @param options - OAuth callback options (code, state)
-   * @returns Updated response, return pathname, and auth response
+   * Verifies the PKCE state cookie against the URL state, extracts the
+   * sealed `codeVerifier`, exchanges the code, and creates a new session.
+   *
+   * `cookieValue` is `string | undefined` (not optional) to force every
+   * adapter to explicitly pass what they read from the request — silent
+   * omission would be a bug.
    */
   async handleCallback(
     _request: TRequest,
     response: TResponse,
-    options: { code: string; state?: string },
+    options: {
+      code: string;
+      state: string | undefined;
+      cookieValue: string | undefined;
+    },
   ) {
-    // Authenticate with WorkOS using the OAuth code
+    const { codeVerifier, returnPathname, customState } =
+      await this.core.verifyCallbackState({
+        stateFromUrl: options.state,
+        cookieValue: options.cookieValue,
+      });
+
     const authResponse = await this.client.userManagement.authenticateWithCode({
       code: options.code,
       clientId: this.config.clientId,
+      codeVerifier,
     });
 
-    // Create and save the new session
     const session: Session = {
       accessToken: authResponse.accessToken,
       refreshToken: authResponse.refreshToken,
@@ -245,42 +283,10 @@ export class AuthService<TRequest, TResponse> {
       encryptedSession,
     );
 
-    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
-    let returnPathname = '/';
-    let customState: string | undefined;
-
-    if (options.state) {
-      if (options.state.includes('.')) {
-        const [internal, ...rest] = options.state.split('.');
-        customState = rest.join('.'); // Rejoin in case userState contains dots
-        try {
-          // Reverse URL-safe base64 encoding and decode
-          const decoded = (internal ?? '')
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
-          const parsed = JSON.parse(atob(decoded));
-          returnPathname = parsed.returnPathname || '/';
-        } catch {
-          // Malformed internal state, use default
-        }
-      } else {
-        try {
-          const parsed = JSON.parse(atob(options.state));
-          if (parsed.returnPathname) {
-            returnPathname = parsed.returnPathname;
-          } else {
-            customState = options.state;
-          }
-        } catch {
-          customState = options.state;
-        }
-      }
-    }
-
     return {
       response: updatedResponse,
       headers,
-      returnPathname,
+      returnPathname: returnPathname ?? '/',
       state: customState,
       authResponse,
     };
