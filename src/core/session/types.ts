@@ -117,8 +117,43 @@ export interface SessionEncryption {
     encryptedData: string,
     options: {
       password: string;
+      ttl?: number | undefined;
     },
   ) => Promise<T>;
+}
+
+/**
+ * Cookie options for the PKCE verifier cookie (`wos-auth-verifier`).
+ *
+ * Shape is intentionally narrower than the generic `CookieOptions`:
+ * - `name` and `maxAge` are literal types — the contract hardcodes them.
+ * - `sameSite` excludes `'strict'` — the strict→lax downgrade happens at
+ *   construction time so the browser can send the cookie on the cross-site
+ *   redirect back from WorkOS.
+ * - `httpOnly` is a literal `true` — no way to accidentally construct PKCE
+ *   options without it.
+ */
+export interface PKCECookieOptions {
+  name: 'wos-auth-verifier';
+  path: '/';
+  httpOnly: true;
+  secure: boolean;
+  sameSite: 'lax' | 'none';
+  maxAge: 600;
+  domain?: string;
+}
+
+/**
+ * Result shape returned by `getAuthorizationUrl` / `getSignInUrl` / `getSignUpUrl`.
+ *
+ * Adapters set a cookie with `sealedState` as the value using `cookieOptions`,
+ * then redirect the browser to `url`. On callback, adapters read the cookie
+ * and pass both it and the URL's `state` param to `handleCallback`.
+ */
+export interface GetAuthorizationUrlResult {
+  url: string;
+  sealedState: string;
+  cookieOptions: PKCECookieOptions;
 }
 
 export interface CookieOptions {

@@ -43,6 +43,8 @@ describe('createAuthService', () => {
       expect(typeof service.getAuthorizationUrl).toBe('function');
       expect(typeof service.getSignInUrl).toBe('function');
       expect(typeof service.getSignUpUrl).toBe('function');
+      expect(typeof service.getPKCECookieOptions).toBe('function');
+      expect(typeof service.buildPKCEDeleteCookieHeader).toBe('function');
       expect(typeof service.getWorkOS).toBe('function');
       expect(typeof service.handleCallback).toBe('function');
     });

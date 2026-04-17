@@ -23,6 +23,20 @@ export class TokenValidationError extends AuthKitError {
   }
 }
 
+export class OAuthStateMismatchError extends AuthKitError {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = 'OAuthStateMismatchError';
+  }
+}
+
+export class PKCECookieMissingError extends AuthKitError {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = 'PKCECookieMissingError';
+  }
+}
+
 export class TokenRefreshError extends AuthKitError {
   readonly userId?: string;
   readonly sessionId?: string;

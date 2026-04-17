@@ -1,10 +1,15 @@
+import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
+import {
+  OAuthStateMismatchError,
+  PKCECookieMissingError,
+} from '../core/errors.js';
 import { AuthService } from './AuthService.js';
 
 const mockConfig = {
   clientId: 'test-client-id',
   apiKey: 'test-api-key',
-  redirectUri: 'http://localhost:3000/callback',
-  cookiePassword: 'test-password-that-is-32-chars-long!!',
+  redirectUri: 'https://app.example.com/callback',
+  cookiePassword: 'this-is-a-test-password-that-is-32-characters-long!',
   cookieName: 'wos-session',
 };
 
@@ -32,23 +37,43 @@ const mockStorage = {
   }),
 };
 
-const mockClient = {
-  userManagement: {
-    getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
-    getAuthorizationUrl: ({ screenHint }: any) =>
-      `https://api.workos.com/sso/authorize?screen_hint=${screenHint || ''}`,
-    authenticateWithCode: async ({ code }: any) => ({
-      accessToken: `access-${code}`,
-      refreshToken: `refresh-${code}`,
-      user: mockUser,
-      impersonator: undefined,
-    }),
-    getLogoutUrl: ({ sessionId }: any) =>
-      `https://api.workos.com/sso/logout?session_id=${sessionId}`,
-  },
-};
+const testVerifier = 'test-verifier-abcdefghijklmnopqrstuvwxyz1234567890';
 
-const mockEncryption = {
+function makeClient(capture?: { authCall?: Record<string, unknown> }) {
+  return {
+    userManagement: {
+      getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+      getAuthorizationUrl: (opts: any) => {
+        const params = new URLSearchParams({
+          state: opts.state ?? '',
+          screen_hint: opts.screenHint ?? '',
+        });
+        return `https://api.workos.com/sso/authorize?${params.toString()}`;
+      },
+      authenticateWithCode: async (opts: any) => {
+        if (capture) capture.authCall = opts;
+        return {
+          accessToken: `access-${opts.code}`,
+          refreshToken: `refresh-${opts.code}`,
+          user: mockUser,
+          impersonator: undefined,
+        };
+      },
+      getLogoutUrl: ({ sessionId }: any) =>
+        `https://api.workos.com/sso/logout?session_id=${sessionId}`,
+    },
+    pkce: {
+      generate: async () => ({
+        codeVerifier: testVerifier,
+        codeChallenge: 'test-challenge',
+        codeChallengeMethod: 'S256',
+      }),
+    },
+  };
+}
+
+// For withAuth / getSession tests — returns a decrypted Session-shaped blob.
+const mockEncryptionSessionShape = {
   sealData: async () => 'encrypted-session-data',
   unsealData: async () => ({
     accessToken: 'test-access-token',
@@ -65,8 +90,8 @@ describe('AuthService', () => {
     service = new AuthService(
       mockConfig as any,
       mockStorage as any,
-      mockClient as any,
-      mockEncryption as any,
+      makeClient() as any,
+      mockEncryptionSessionShape as any,
     );
   });
 
@@ -85,8 +110,8 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
-        mockClient as any,
-        mockEncryption as any,
+        makeClient() as any,
+        mockEncryptionSessionShape as any,
       );
 
       const result = await testService.withAuth('request');
@@ -105,7 +130,7 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         mockStorage as any,
-        mockClient as any,
+        makeClient() as any,
         failingEncryption as any,
       );
 
@@ -131,8 +156,8 @@ describe('AuthService', () => {
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
-        mockClient as any,
-        mockEncryption as any,
+        makeClient() as any,
+        mockEncryptionSessionShape as any,
       );
 
       const result = await testService.getSession('request');
@@ -168,26 +193,78 @@ describe('AuthService', () => {
   });
 
   describe('getAuthorizationUrl()', () => {
-    it('delegates to operations', async () => {
-      const result = await service.getAuthorizationUrl();
+    it('returns url + sealedState + cookieOptions triple', async () => {
+      const client = makeClient();
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        client as any,
+        sessionEncryption,
+      );
 
-      expect(result).toContain('authorize');
+      const result = await realService.getAuthorizationUrl();
+
+      expect(result.url).toContain('authorize');
+      expect(result.sealedState.length).toBeGreaterThan(0);
+      expect(result.cookieOptions.name).toBe('wos-auth-verifier');
     });
   });
 
   describe('getSignInUrl()', () => {
-    it('returns sign-in URL', async () => {
-      const result = await service.getSignInUrl();
+    it('returns sign-in URL in the triple shape', async () => {
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
 
-      expect(result).toContain('screen_hint=sign-in');
+      const result = await realService.getSignInUrl();
+
+      expect(result.url).toContain('screen_hint=sign-in');
     });
   });
 
   describe('getSignUpUrl()', () => {
-    it('returns sign-up URL', async () => {
-      const result = await service.getSignUpUrl();
+    it('returns sign-up URL in the triple shape', async () => {
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
 
-      expect(result).toContain('screen_hint=sign-up');
+      const result = await realService.getSignUpUrl();
+
+      expect(result.url).toContain('screen_hint=sign-up');
+    });
+  });
+
+  describe('getPKCECookieOptions()', () => {
+    it('returns PKCE cookie options derived from config', () => {
+      const opts = service.getPKCECookieOptions();
+
+      expect(opts.name).toBe('wos-auth-verifier');
+      expect(opts.path).toBe('/');
+      expect(opts.httpOnly).toBe(true);
+      expect(opts.maxAge).toBe(600);
+      expect(opts.secure).toBe(true); // https redirectUri
+    });
+
+    it('derives secure from explicit redirectUri arg', () => {
+      const opts = service.getPKCECookieOptions('http://localhost:3000/cb');
+
+      expect(opts.secure).toBe(false);
+    });
+  });
+
+  describe('buildPKCEDeleteCookieHeader()', () => {
+    it('returns a Set-Cookie header deleting the verifier cookie', () => {
+      const header = service.buildPKCEDeleteCookieHeader();
+
+      expect(header).toContain('wos-auth-verifier=;');
+      expect(header).toContain('Max-Age=0');
+      expect(header).toContain('HttpOnly');
     });
   });
 
@@ -195,73 +272,115 @@ describe('AuthService', () => {
     it('returns WorkOS client', () => {
       const result = service.getWorkOS();
 
-      expect(result).toBe(mockClient);
+      expect(result).toBeDefined();
+      expect(typeof (result as any).userManagement.getJwksUrl).toBe('function');
     });
   });
 
   describe('handleCallback()', () => {
-    it('authenticates and creates session', async () => {
-      const result = await service.handleCallback('request', 'response', {
-        code: 'auth-code-123',
+    it('round-trips through getAuthorizationUrl → handleCallback', async () => {
+      const capture: { authCall?: Record<string, unknown> } = {};
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient(capture) as any,
+        sessionEncryption,
+      );
+
+      const { sealedState } = await realService.getAuthorizationUrl({
+        returnPathname: '/dashboard',
+        state: 'my.custom.state',
       });
 
-      expect(result.authResponse.accessToken).toBe('access-auth-code-123');
-      expect(result.returnPathname).toBe('/');
-      expect(result.response).toBe('updated-response');
-    });
-
-    it('decodes returnPathname from state', async () => {
-      const state = btoa(JSON.stringify({ returnPathname: '/dashboard' }));
-
-      const result = await service.handleCallback('request', 'response', {
-        code: 'auth-code-123',
-        state,
+      const result = await realService.handleCallback('req', 'res', {
+        code: 'auth-code-xyz',
+        state: sealedState,
+        cookieValue: sealedState,
       });
 
+      expect(result.authResponse.accessToken).toBe('access-auth-code-xyz');
       expect(result.returnPathname).toBe('/dashboard');
+      expect(result.state).toBe('my.custom.state');
+      expect(capture.authCall?.codeVerifier).toBe(testVerifier);
     });
 
-    it('treats invalid state as custom state', async () => {
-      const result = await service.handleCallback('request', 'response', {
-        code: 'auth-code-123',
-        state: 'invalid-state',
+    it('throws OAuthStateMismatchError when cookieValue differs from state', async () => {
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { sealedState } = await realService.getAuthorizationUrl();
+      // Tamper one byte in the cookie copy
+      const tampered = sealedState.slice(0, -2) + 'XX';
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+          cookieValue: tampered,
+        }),
+      ).rejects.toThrow(OAuthStateMismatchError);
+    });
+
+    it('throws PKCECookieMissingError when cookieValue is undefined', async () => {
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { sealedState } = await realService.getAuthorizationUrl();
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+          cookieValue: undefined,
+        }),
+      ).rejects.toThrow(PKCECookieMissingError);
+    });
+
+    it('throws OAuthStateMismatchError when state is undefined', async () => {
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: undefined,
+          cookieValue: 'something',
+        }),
+      ).rejects.toThrow(OAuthStateMismatchError);
+    });
+
+    it('defaults returnPathname to "/" when the sealed state omits it', async () => {
+      const capture: { authCall?: Record<string, unknown> } = {};
+      const realService = new AuthService(
+        mockConfig as any,
+        mockStorage as any,
+        makeClient(capture) as any,
+        sessionEncryption,
+      );
+
+      const { sealedState } = await realService.getAuthorizationUrl({
+        // no returnPathname
+      });
+
+      const result = await realService.handleCallback('req', 'res', {
+        code: 'c',
+        state: sealedState,
+        cookieValue: sealedState,
       });
 
       expect(result.returnPathname).toBe('/');
-      expect(result.state).toBe('invalid-state');
-    });
-
-    it('parses new format with internal.userState', async () => {
-      // Create URL-safe base64 internal state
-      const internal = btoa(JSON.stringify({ returnPathname: '/profile' }))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-      const state = `${internal}.my-custom-state`;
-
-      const result = await service.handleCallback('request', 'response', {
-        code: 'auth-code-123',
-        state,
-      });
-
-      expect(result.returnPathname).toBe('/profile');
-      expect(result.state).toBe('my-custom-state');
-    });
-
-    it('handles user state with dots', async () => {
-      const internal = btoa(JSON.stringify({ returnPathname: '/dashboard' }))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-      const state = `${internal}.user.state.with.dots`;
-
-      const result = await service.handleCallback('request', 'response', {
-        code: 'auth-code-123',
-        state,
-      });
-
-      expect(result.returnPathname).toBe('/dashboard');
-      expect(result.state).toBe('user.state.with.dots');
     });
   });
 });

@@ -75,6 +75,10 @@ export function createAuthService<TRequest, TResponse>(options: {
     getAuthorizationUrl: opts => getService().getAuthorizationUrl(opts),
     getSignInUrl: opts => getService().getSignInUrl(opts),
     getSignUpUrl: opts => getService().getSignUpUrl(opts),
+    getPKCECookieOptions: redirectUri =>
+      getService().getPKCECookieOptions(redirectUri),
+    buildPKCEDeleteCookieHeader: redirectUri =>
+      getService().buildPKCEDeleteCookieHeader(redirectUri),
     getWorkOS: () => getService().getWorkOS(),
     handleCallback: (request, response, opts) =>
       getService().handleCallback(request, response, opts),

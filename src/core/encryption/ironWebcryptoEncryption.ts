@@ -58,7 +58,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
   // Decrypt data from iron-session with HMAC verification
   async unsealData<T = unknown>(
     encryptedData: string,
-    { password }: { password: string },
+    { password, ttl = 0 }: { password: string; ttl?: number | undefined },
   ): Promise<T> {
     // First, parse the seal to extract the version
     const { sealWithoutVersion, tokenVersion } = this.parseSeal(encryptedData);
@@ -80,7 +80,7 @@ export class SessionEncryption implements SessionEncryptionInterface {
         iterations: 1,
         minPasswordlength: 32,
       },
-      ttl: 0,
+      ttl: ttl * 1000, // Convert seconds to milliseconds. 0 = no TTL enforcement.
       timestampSkewSec: 60,
       localtimeOffsetMsec: 0,
     });
