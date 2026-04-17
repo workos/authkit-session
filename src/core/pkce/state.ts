@@ -4,6 +4,15 @@ import type { SessionEncryption } from '../session/types.js';
 import { PKCE_COOKIE_MAX_AGE } from './constants.js';
 
 /**
+ * Clock-skew tolerance (ms) for the payload-level `issuedAt` check.
+ *
+ * Matches iron-webcrypto's default `timestampSkewSec` (60s). Allows a
+ * sign-in issued on node A to be verified on node B whose clock is
+ * slightly behind without failing a legitimate callback.
+ */
+const PKCE_CLOCK_SKEW_MS = 60_000;
+
+/**
  * Runtime schema for the sealed PKCE state blob.
  *
  * Validated at unseal time as defense-in-depth against any future code path
@@ -84,7 +93,7 @@ export async function unsealState(
   }
 
   const ageMs = Date.now() - result.output.issuedAt;
-  if (ageMs < 0 || ageMs > PKCE_COOKIE_MAX_AGE * 1000) {
+  if (ageMs < -PKCE_CLOCK_SKEW_MS || ageMs > PKCE_COOKIE_MAX_AGE * 1000) {
     throw new SessionEncryptionError('PKCE state expired');
   }
 

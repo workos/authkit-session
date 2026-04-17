@@ -197,10 +197,27 @@ describe('PKCE state seal/unseal', () => {
       ).rejects.toThrow(/PKCE state expired/);
     });
 
-    it('rejects payloads with issuedAt in the future (clock skew guard)', async () => {
+    it('tolerates bounded negative skew (issuedAt up to 60s ahead of now)', async () => {
+      // Simulates sign-in on a node whose clock is ahead of the callback
+      // node by 30s — within the 60s tolerance.
       vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
       const sealed = await sessionEncryption.sealData(
-        { ...validState, issuedAt: Date.now() + 60_000 },
+        { ...validState, issuedAt: Date.now() + 30_000 },
+        { password: testPassword, ttl: 600 },
+      );
+
+      const unsealed = await unsealState(
+        sessionEncryption,
+        testPassword,
+        sealed,
+      );
+      expect(unsealed).toMatchObject(validState);
+    });
+
+    it('rejects payloads meaningfully in the future (issuedAt beyond skew)', async () => {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      const sealed = await sessionEncryption.sealData(
+        { ...validState, issuedAt: Date.now() + 120_000 },
         { password: testPassword, ttl: 600 },
       );
 
