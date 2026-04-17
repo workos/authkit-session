@@ -156,7 +156,7 @@ describe('PKCE state seal/unseal', () => {
       expect(unsealed).toMatchObject(validState);
     });
 
-    it('throws after TTL expires (+60s skew)', async () => {
+    it('throws just past the 600s payload-level expiry', async () => {
       vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
       const sealed = await sealState(
         sessionEncryption,
@@ -164,8 +164,8 @@ describe('PKCE state seal/unseal', () => {
         validState,
       );
 
-      // 600s TTL + 60s skew = 660s grace. Advance to 661s.
-      vi.setSystemTime(new Date('2026-01-01T00:11:01.000Z'));
+      // Payload-level expiry is strict at 600s (no positive skew grace).
+      vi.setSystemTime(new Date('2026-01-01T00:10:01.000Z')); // +601s
 
       await expect(
         unsealState(sessionEncryption, testPassword, sealed),

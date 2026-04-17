@@ -6,9 +6,13 @@ import { PKCE_COOKIE_MAX_AGE } from './constants.js';
 /**
  * Clock-skew tolerance (ms) for the payload-level `issuedAt` check.
  *
- * Matches iron-webcrypto's default `timestampSkewSec` (60s). Allows a
- * sign-in issued on node A to be verified on node B whose clock is
- * slightly behind without failing a legitimate callback.
+ * Applied asymmetrically, only to the negative (future-`issuedAt`) side:
+ * allows a sign-in issued on node A to be verified on node B whose clock
+ * is up to 60s behind without failing a legitimate callback. The upper
+ * bound (expiry) is strict — `PKCE_COOKIE_MAX_AGE` with no grace — so
+ * this payload check is always at least as strict as iron-webcrypto's
+ * symmetric 60s skew on `ttl`, making it the authoritative expiry guard
+ * regardless of how a custom `SessionEncryption` adapter treats `ttl`.
  */
 const PKCE_CLOCK_SKEW_MS = 60_000;
 

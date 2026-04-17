@@ -9,8 +9,9 @@ import { PKCE_COOKIE_MAX_AGE, PKCE_COOKIE_NAME } from './constants.js';
  * - `sameSite: 'strict'` is downgraded to `'lax'` so the cookie survives the
  *   cross-site redirect back from WorkOS.
  * - `sameSite: 'none'` is preserved (iframe/embed flows require it).
- * - `secure` is inferred from the redirect URI's protocol, defaulting
- *   fail-closed to `true` on invalid/missing URLs.
+ * - `secure` is forced to `true` when `sameSite === 'none'` (required by
+ *   modern browsers). Otherwise it is inferred from the redirect URI's
+ *   protocol, defaulting fail-closed to `true` on invalid/missing URLs.
  * - `path` is scoped to the redirect URI's pathname so two AuthKit apps on
  *   the same host under different subpaths don't overwrite each other's
  *   verifier cookie. Falls back to `/` when no redirect URI is available.

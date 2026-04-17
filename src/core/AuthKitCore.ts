@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { once } from '../utils.js';
@@ -184,7 +185,12 @@ export class AuthKitCore {
         'PKCE verifier cookie missing — cannot verify OAuth state. Ensure Set-Cookie headers are propagated on redirects.',
       );
     }
-    if (stateFromUrl !== cookieValue) {
+    const urlBytes = Buffer.from(stateFromUrl, 'utf8');
+    const cookieBytes = Buffer.from(cookieValue, 'utf8');
+    if (
+      urlBytes.length !== cookieBytes.length ||
+      !timingSafeEqual(urlBytes, cookieBytes)
+    ) {
       throw new OAuthStateMismatchError('OAuth state mismatch');
     }
 
