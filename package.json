@@ -1,6 +1,6 @@
 {
   "name": "@workos/authkit-session",
-  "version": "0.4.0",
+  "version": "0.3.4",
   "description": "Framework-agnostic authentication library for WorkOS with pluggable storage adapters",
   "keywords": [],
   "license": "MIT",
@@ -9,11 +9,7 @@
     "type": "git",
     "url": "https://github.com/workos/authkit-session.git"
   },
-  "files": [
-    "dist",
-    "src",
-    "README.md"
-  ],
+  "files": ["dist", "src", "README.md"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
