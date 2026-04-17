@@ -1,10 +1,10 @@
 import sessionEncryption from '../encryption/ironWebcryptoEncryption.js';
 import { SessionEncryptionError } from '../errors.js';
-import { sealState, unsealState, type PKCEState } from './state.js';
+import { sealState, unsealState, type PKCEStateInput } from './state.js';
 
 const testPassword = 'this-is-a-test-password-that-is-32-characters-long!';
 
-const validState: PKCEState = {
+const validState: PKCEStateInput = {
   nonce: '8b7b1c32-7d8f-44f9-aa51-4c3a6c8fb8d9',
   codeVerifier: 'verifier-12345678901234567890123456789012345678',
   returnPathname: '/dashboard',
@@ -16,22 +16,47 @@ describe('PKCE state seal/unseal', () => {
     const sealed = await sealState(sessionEncryption, testPassword, validState);
     const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
 
-    expect(unsealed).toEqual(validState);
+    expect(unsealed).toMatchObject(validState);
+    expect(typeof unsealed.issuedAt).toBe('number');
   });
 
   it('round-trips without optional fields', async () => {
-    const minimal: PKCEState = {
+    const minimal: PKCEStateInput = {
       nonce: 'n',
       codeVerifier: 'v',
     };
     const sealed = await sealState(sessionEncryption, testPassword, minimal);
     const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
 
-    expect(unsealed).toEqual(minimal);
+    expect(unsealed).toMatchObject(minimal);
+    expect(typeof unsealed.issuedAt).toBe('number');
+  });
+
+  it('stamps issuedAt with Date.now() at seal time', async () => {
+    vi.useFakeTimers();
+    try {
+      const fixedNow = new Date('2026-01-01T00:00:00.000Z').getTime();
+      vi.setSystemTime(fixedNow);
+
+      const sealed = await sealState(
+        sessionEncryption,
+        testPassword,
+        validState,
+      );
+      const unsealed = await unsealState(
+        sessionEncryption,
+        testPassword,
+        sealed,
+      );
+
+      expect(unsealed.issuedAt).toBe(fixedNow);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('preserves customState with dots exactly', async () => {
-    const withDots: PKCEState = {
+    const withDots: PKCEStateInput = {
       nonce: 'n',
       codeVerifier: 'v',
       customState: 'has.many.dots.in.it',
@@ -43,7 +68,7 @@ describe('PKCE state seal/unseal', () => {
   });
 
   it('preserves JSON-like customState', async () => {
-    const jsonLike: PKCEState = {
+    const jsonLike: PKCEStateInput = {
       nonce: 'n',
       codeVerifier: 'v',
       customState: '{"key":"value","nested":{"a":1}}',
@@ -55,7 +80,7 @@ describe('PKCE state seal/unseal', () => {
   });
 
   it('preserves 2KB customState', async () => {
-    const large: PKCEState = {
+    const large: PKCEStateInput = {
       nonce: 'n',
       codeVerifier: 'v',
       customState: 'x'.repeat(2048),
@@ -128,7 +153,7 @@ describe('PKCE state seal/unseal', () => {
         sealed,
       );
 
-      expect(unsealed).toEqual(validState);
+      expect(unsealed).toMatchObject(validState);
     });
 
     it('throws after TTL expires (+60s skew)', async () => {
@@ -145,6 +170,43 @@ describe('PKCE state seal/unseal', () => {
       await expect(
         unsealState(sessionEncryption, testPassword, sealed),
       ).rejects.toThrow(SessionEncryptionError);
+    });
+
+    it('rejects payloads older than 600s even when the encryptor ignores ttl', async () => {
+      // Custom SessionEncryption that ignores the ttl option — simulates an
+      // adapter that would let a stale blob through. The payload-level
+      // issuedAt check in unsealState is the authoritative guard.
+      const ignoresTtl = {
+        sealData: (data: unknown, options: { password: string }) =>
+          sessionEncryption.sealData(data, { password: options.password }),
+        unsealData: <T>(sealed: string, options: { password: string }) =>
+          sessionEncryption.unsealData<T>(sealed, {
+            password: options.password,
+          }),
+      };
+
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      const sealed = await sealState(ignoresTtl, testPassword, validState);
+
+      // 605s — inside iron's default 60s skew grace, outside the strict 600s
+      // payload-level check.
+      vi.setSystemTime(new Date('2026-01-01T00:10:05.000Z'));
+
+      await expect(
+        unsealState(ignoresTtl, testPassword, sealed),
+      ).rejects.toThrow(/PKCE state expired/);
+    });
+
+    it('rejects payloads with issuedAt in the future (clock skew guard)', async () => {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      const sealed = await sessionEncryption.sealData(
+        { ...validState, issuedAt: Date.now() + 60_000 },
+        { password: testPassword, ttl: 600 },
+      );
+
+      await expect(
+        unsealState(sessionEncryption, testPassword, sealed),
+      ).rejects.toThrow(/PKCE state expired/);
     });
   });
 });

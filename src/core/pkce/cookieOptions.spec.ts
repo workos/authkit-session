@@ -96,12 +96,6 @@ describe('getPKCECookieOptions', () => {
       expect(opts.httpOnly).toBe(true);
     });
 
-    it('always sets path=/', () => {
-      const opts = getPKCECookieOptions(baseConfig);
-
-      expect(opts.path).toBe('/');
-    });
-
     it('always sets name=wos-auth-verifier', () => {
       const opts = getPKCECookieOptions(baseConfig);
 
@@ -112,6 +106,60 @@ describe('getPKCECookieOptions', () => {
       const opts = getPKCECookieOptions(baseConfig);
 
       expect(opts.maxAge).toBe(600);
+    });
+  });
+
+  describe('path scoping', () => {
+    it('scopes path to the redirectUri pathname', () => {
+      const opts = getPKCECookieOptions({
+        ...baseConfig,
+        redirectUri: 'https://app.example.com/callback',
+      });
+
+      expect(opts.path).toBe('/callback');
+    });
+
+    it('scopes path to nested pathname', () => {
+      const opts = getPKCECookieOptions({
+        ...baseConfig,
+        redirectUri: 'https://app.example.com/auth/v2/callback',
+      });
+
+      expect(opts.path).toBe('/auth/v2/callback');
+    });
+
+    it('prefers explicit redirectUri arg over config for path', () => {
+      const opts = getPKCECookieOptions(
+        { ...baseConfig, redirectUri: 'https://app.example.com/a' },
+        'https://app.example.com/b/callback',
+      );
+
+      expect(opts.path).toBe('/b/callback');
+    });
+
+    it("falls back to '/' when redirectUri is missing", () => {
+      const { redirectUri: _unused, ...configWithoutUri } = baseConfig;
+      const opts = getPKCECookieOptions(configWithoutUri as AuthKitConfig);
+
+      expect(opts.path).toBe('/');
+    });
+
+    it("falls back to '/' on invalid redirectUri", () => {
+      const opts = getPKCECookieOptions({
+        ...baseConfig,
+        redirectUri: 'not-a-valid-url',
+      });
+
+      expect(opts.path).toBe('/');
+    });
+
+    it("returns '/' when redirectUri has no pathname", () => {
+      const opts = getPKCECookieOptions({
+        ...baseConfig,
+        redirectUri: 'https://app.example.com',
+      });
+
+      expect(opts.path).toBe('/');
     });
   });
 
@@ -140,7 +188,7 @@ describe('serializePKCESetCookie', () => {
     const header = serializePKCESetCookie(opts, 'sealed-value');
 
     expect(header).toContain('wos-auth-verifier=sealed-value');
-    expect(header).toContain('Path=/');
+    expect(header).toContain('Path=/callback');
     expect(header).toContain('Max-Age=600');
     expect(header).toContain('HttpOnly');
     expect(header).toContain('Secure');

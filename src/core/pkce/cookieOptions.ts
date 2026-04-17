@@ -11,6 +11,9 @@ import { PKCE_COOKIE_MAX_AGE, PKCE_COOKIE_NAME } from './constants.js';
  * - `sameSite: 'none'` is preserved (iframe/embed flows require it).
  * - `secure` is inferred from the redirect URI's protocol, defaulting
  *   fail-closed to `true` on invalid/missing URLs.
+ * - `path` is scoped to the redirect URI's pathname so two AuthKit apps on
+ *   the same host under different subpaths don't overwrite each other's
+ *   verifier cookie. Falls back to `/` when no redirect URI is available.
  */
 export function getPKCECookieOptions(
   config: AuthKitConfig,
@@ -23,17 +26,22 @@ export function getPKCECookieOptions(
 
   const urlString = redirectUri ?? config.redirectUri;
   let secure = true;
-  if (sameSite !== 'none' && urlString) {
+  let path = '/';
+  if (urlString) {
     try {
-      secure = new URL(urlString).protocol === 'https:';
+      const parsed = new URL(urlString);
+      if (sameSite !== 'none') {
+        secure = parsed.protocol === 'https:';
+      }
+      path = parsed.pathname || '/';
     } catch {
-      secure = true;
+      // Fail-closed: secure stays true, path stays '/'.
     }
   }
 
   return {
     name: PKCE_COOKIE_NAME,
-    path: '/',
+    path,
     httpOnly: true,
     secure,
     sameSite,

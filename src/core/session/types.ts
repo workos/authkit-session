@@ -132,10 +132,13 @@ export interface SessionEncryption {
  *   redirect back from WorkOS.
  * - `httpOnly` is a literal `true` — no way to accidentally construct PKCE
  *   options without it.
+ * - `path` is derived from the redirect URI pathname so multiple AuthKit
+ *   apps on the same host don't collide on a shared `wos-auth-verifier`
+ *   cookie slot. Falls back to `/` if the redirect URI is missing/invalid.
  */
 export interface PKCECookieOptions {
   name: 'wos-auth-verifier';
-  path: '/';
+  path: string;
   httpOnly: true;
   secure: boolean;
   sameSite: 'lax' | 'none';

@@ -245,7 +245,7 @@ describe('AuthService', () => {
       const opts = service.getPKCECookieOptions();
 
       expect(opts.name).toBe('wos-auth-verifier');
-      expect(opts.path).toBe('/');
+      expect(opts.path).toBe('/callback'); // scoped from config redirectUri
       expect(opts.httpOnly).toBe(true);
       expect(opts.maxAge).toBe(600);
       expect(opts.secure).toBe(true); // https redirectUri
