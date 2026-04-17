@@ -213,9 +213,6 @@ export class AuthService<TRequest, TResponse> {
 
   /**
    * Get PKCE verifier cookie options for the given redirect URI.
-   *
-   * Thin delegator so adapters never need to read raw config keys. Equivalent
-   * to calling the exported `getPKCECookieOptions(config, redirectUri)`.
    */
   getPKCECookieOptions(redirectUri?: string): PKCECookieOptions {
     return getPKCECookieOptions(this.config, redirectUri);

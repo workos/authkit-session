@@ -16,13 +16,10 @@ export function getPKCECookieOptions(
   config: AuthKitConfig,
   redirectUri?: string,
 ): PKCECookieOptions {
+  // 'strict' is downgraded to 'lax' (see JSDoc); anything else falls through to 'lax'.
   const configuredSameSite = (config.cookieSameSite ?? 'lax').toLowerCase();
   const sameSite: 'lax' | 'none' =
-    configuredSameSite === 'strict'
-      ? 'lax'
-      : configuredSameSite === 'none'
-        ? 'none'
-        : 'lax';
+    configuredSameSite === 'none' ? 'none' : 'lax';
 
   const urlString = redirectUri ?? config.redirectUri;
   let secure = true;
