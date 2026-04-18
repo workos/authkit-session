@@ -71,15 +71,6 @@ export {
 } from './core/errors.js';
 
 // ============================================
-// PKCE (adapter integration surface)
-// ============================================
-export { PKCE_COOKIE_NAME } from './core/pkce/constants.js';
-export {
-  getPKCECookieOptions,
-  serializePKCESetCookie,
-} from './core/pkce/cookieOptions.js';
-
-// ============================================
 // Type Exports
 // ============================================
 export * from './core/session/types.js';

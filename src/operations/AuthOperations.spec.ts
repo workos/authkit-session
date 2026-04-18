@@ -240,20 +240,20 @@ describe('AuthOperations', () => {
     });
   });
 
-  describe('getAuthorizationUrl()', () => {
-    it('returns triple shape: url + sealedState + cookieOptions', async () => {
-      const result = await operations.getAuthorizationUrl();
+  describe('createAuthorization()', () => {
+    it('returns url + sealedState + cookieOptions for storage dispatch', async () => {
+      const result = await operations.createAuthorization();
 
       expect(typeof result.url).toBe('string');
       expect(typeof result.sealedState).toBe('string');
       expect(result.sealedState.length).toBeGreaterThan(0);
-      expect(result.cookieOptions.name).toBe('wos-auth-verifier');
       expect(result.cookieOptions.maxAge).toBe(600);
+      expect(result.cookieOptions.path).toBe('/callback');
       expect(result.url).toContain('client_id=test-client-id');
     });
 
     it('passes the sealedState as the URL state param (identical string)', async () => {
-      const result = await operations.getAuthorizationUrl();
+      const result = await operations.createAuthorization();
       const urlState = decodeURIComponent(
         new URL(result.url).searchParams.get('state') ?? '',
       );
@@ -262,14 +262,14 @@ describe('AuthOperations', () => {
     });
 
     it('includes codeChallenge + codeChallengeMethod in WorkOS URL', async () => {
-      await operations.getAuthorizationUrl();
+      await operations.createAuthorization();
 
       expect(capture.last?.codeChallenge).toBe('generated-challenge');
       expect(capture.last?.codeChallengeMethod).toBe('S256');
     });
 
     it('seals returnPathname into the state blob', async () => {
-      const result = await operations.getAuthorizationUrl({
+      const result = await operations.createAuthorization({
         returnPathname: '/dashboard',
       });
       const unsealed = await unsealState(
@@ -283,7 +283,7 @@ describe('AuthOperations', () => {
     });
 
     it('seals customState into the state blob', async () => {
-      const result = await operations.getAuthorizationUrl({
+      const result = await operations.createAuthorization({
         state: 'my-custom-state',
       });
       const unsealed = await unsealState(
@@ -296,7 +296,7 @@ describe('AuthOperations', () => {
     });
 
     it('seals both returnPathname and customState together', async () => {
-      const result = await operations.getAuthorizationUrl({
+      const result = await operations.createAuthorization({
         returnPathname: '/profile',
         state: 'custom',
       });
@@ -310,8 +310,34 @@ describe('AuthOperations', () => {
       expect(unsealed.customState).toBe('custom');
     });
 
+    it('seals per-call redirectUri override into the state blob', async () => {
+      const result = await operations.createAuthorization({
+        redirectUri: 'https://app.example.com/custom/callback',
+      });
+      const unsealed = await unsealState(
+        sessionEncryption,
+        mockConfig.cookiePassword,
+        result.sealedState,
+      );
+
+      expect(unsealed.redirectUri).toBe(
+        'https://app.example.com/custom/callback',
+      );
+    });
+
+    it('omits redirectUri from the state blob when using the config default', async () => {
+      const result = await operations.createAuthorization();
+      const unsealed = await unsealState(
+        sessionEncryption,
+        mockConfig.cookiePassword,
+        result.sealedState,
+      );
+
+      expect(unsealed.redirectUri).toBeUndefined();
+    });
+
     it('includes screenHint when provided', async () => {
-      const result = await operations.getAuthorizationUrl({
+      const result = await operations.createAuthorization({
         screenHint: 'sign-up',
       });
 
@@ -319,24 +345,24 @@ describe('AuthOperations', () => {
     });
 
     it('generates a unique nonce per call (concurrent last-flow-wins)', async () => {
-      const a = await operations.getAuthorizationUrl();
-      const b = await operations.getAuthorizationUrl();
+      const a = await operations.createAuthorization();
+      const b = await operations.createAuthorization();
 
       expect(a.sealedState).not.toBe(b.sealedState);
     });
   });
 
-  describe('getSignInUrl()', () => {
+  describe('createSignIn()', () => {
     it('returns authorization URL with sign-in hint', async () => {
-      const result = await operations.getSignInUrl();
+      const result = await operations.createSignIn();
 
       expect(result.url).toContain('screen_hint=sign-in');
     });
   });
 
-  describe('getSignUpUrl()', () => {
+  describe('createSignUp()', () => {
     it('returns authorization URL with sign-up hint', async () => {
-      const result = await operations.getSignUpUrl();
+      const result = await operations.createSignUp();
 
       expect(result.url).toContain('screen_hint=sign-up');
     });

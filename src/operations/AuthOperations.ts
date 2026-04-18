@@ -1,11 +1,13 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
-import { generateAuthorizationUrl } from '../core/pkce/generateAuthorizationUrl.js';
+import {
+  type GeneratedAuthorizationUrl,
+  generateAuthorizationUrl,
+} from '../core/pkce/generateAuthorizationUrl.js';
 import type {
   AuthResult,
   GetAuthorizationUrlOptions,
-  GetAuthorizationUrlResult,
   Session,
   SessionEncryption,
 } from '../core/session/types.js';
@@ -125,18 +127,18 @@ export class AuthOperations {
   }
 
   /**
-   * Get a PKCE-bound WorkOS authorization URL.
+   * Create a PKCE-bound WorkOS authorization URL.
    *
    * Returns the URL, the sealed state blob (to be used as both the cookie
    * value and — already present in the URL — the OAuth `state` param), and
-   * the cookie options the adapter should apply when setting
-   * `wos-auth-verifier`.
+   * the cookie options the verifier cookie should be written with.
+   * AuthService dispatches the write via `SessionStorage.setCookie`.
    *
    * @param options - returnPathname, screenHint, custom state, redirectUri, etc.
    */
-  async getAuthorizationUrl(
+  async createAuthorization(
     options: GetAuthorizationUrlOptions = {},
-  ): Promise<GetAuthorizationUrlResult> {
+  ): Promise<GeneratedAuthorizationUrl> {
     return generateAuthorizationUrl({
       client: this.client,
       config: this.config,
@@ -146,24 +148,24 @@ export class AuthOperations {
   }
 
   /**
-   * Convenience method: Get sign-in URL.
+   * Convenience method: Create sign-in authorization URL.
    */
-  async getSignInUrl(
+  async createSignIn(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<GetAuthorizationUrlResult> {
-    return this.getAuthorizationUrl({
+  ): Promise<GeneratedAuthorizationUrl> {
+    return this.createAuthorization({
       ...options,
       screenHint: 'sign-in',
     });
   }
 
   /**
-   * Convenience method: Get sign-up URL.
+   * Convenience method: Create sign-up authorization URL.
    */
-  async getSignUpUrl(
+  async createSignUp(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<GetAuthorizationUrlResult> {
-    return this.getAuthorizationUrl({
+  ): Promise<GeneratedAuthorizationUrl> {
+    return this.createAuthorization({
       ...options,
       screenHint: 'sign-up',
     });

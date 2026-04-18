@@ -1,29 +1,47 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitConfig } from '../config/types.js';
 import type {
+  CookieOptions,
   GetAuthorizationUrlOptions,
-  GetAuthorizationUrlResult,
   SessionEncryption,
 } from '../session/types.js';
 import { getPKCECookieOptions } from './cookieOptions.js';
 import { sealState } from './state.js';
 
 /**
+ * Internal authorization-URL generation result.
+ *
+ * Not exported: AuthService consumes `sealedState` + `cookieOptions` to write
+ * the verifier cookie via `storage.setCookie`, then returns only `{ url, response?, headers? }`
+ * to callers.
+ */
+export interface GeneratedAuthorizationUrl {
+  url: string;
+  sealedState: string;
+  cookieOptions: CookieOptions;
+}
+
+/**
  * Generate a WorkOS authorization URL bound to a PKCE verifier.
  *
  * Returns the URL, the sealed state blob (used as both the OAuth `state`
  * query param AND the cookie value — identical string; the callback does a
- * byte-compare before decrypting), and the cookie options the adapter should
- * apply when setting `wos-auth-verifier`.
+ * byte-compare before decrypting), and the cookie options the verifier
+ * cookie should be written with.
+ *
+ * When `options.redirectUri` overrides the configured default, the override
+ * is sealed into the PKCE state so `handleCallback` can recover it and emit
+ * a matching `Path=` on the verifier-delete cookie.
  */
 export async function generateAuthorizationUrl(params: {
   client: WorkOS;
   config: AuthKitConfig;
   encryption: SessionEncryption;
   options: GetAuthorizationUrlOptions;
-}): Promise<GetAuthorizationUrlResult> {
+}): Promise<GeneratedAuthorizationUrl> {
   const { client, config, encryption, options } = params;
-  const redirectUri = options.redirectUri ?? config.redirectUri;
+  const overrideRedirectUri = options.redirectUri;
+  const redirectUri = overrideRedirectUri ?? config.redirectUri;
 
   const pkce = await client.pkce.generate();
   const nonce = crypto.randomUUID();
@@ -33,6 +51,12 @@ export async function generateAuthorizationUrl(params: {
     codeVerifier: pkce.codeVerifier,
     returnPathname: options.returnPathname,
     customState: options.state,
+    // Only stamp when the caller overrode the config default — keeps the
+    // common-case ciphertext small and avoids polluting state with data
+    // that's already available from config.
+    ...(overrideRedirectUri !== undefined
+      ? { redirectUri: overrideRedirectUri }
+      : {}),
   });
 
   const url = client.userManagement.getAuthorizationUrl({

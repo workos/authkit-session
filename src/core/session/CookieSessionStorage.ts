@@ -1,17 +1,7 @@
 import type { AuthKitConfig } from '../config/types.js';
-import type { HeadersBag, SessionStorage } from './types.js';
+import type { CookieOptions, HeadersBag, SessionStorage } from './types.js';
 
-export interface CookieOptions {
-  path?: string;
-  domain?: string;
-  maxAge?: number;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: 'lax' | 'strict' | 'none';
-  priority?: 'low' | 'medium' | 'high';
-  partitioned?: boolean;
-}
+export type { CookieOptions } from './types.js';
 
 export abstract class CookieSessionStorage<
   TRequest,
@@ -54,40 +44,72 @@ export abstract class CookieSessionStorage<
     /* default no-op. Adapters can override if they CAN mutate a native response */
   }
 
-  protected buildSetCookie(value: string, expired?: boolean): string {
-    const a = [`${this.cookieName}=${encodeURIComponent(value)}`];
-    const o = this.cookieOptions;
-    if (o.path) a.push(`Path=${o.path}`);
-    if (o.domain) a.push(`Domain=${o.domain}`);
-    if (o.maxAge || expired) a.push(`Max-Age=${expired ? 0 : o.maxAge}`);
-    if (o.httpOnly) a.push('HttpOnly');
-    if (o.secure) a.push('Secure');
-    if (o.sameSite) {
+  protected serializeCookie(
+    name: string,
+    value: string,
+    options: CookieOptions,
+    { expired }: { expired?: boolean } = {},
+  ): string {
+    const a = [`${name}=${encodeURIComponent(value)}`];
+    if (options.path) a.push(`Path=${options.path}`);
+    if (options.domain) a.push(`Domain=${options.domain}`);
+    if (options.maxAge != null || expired)
+      a.push(`Max-Age=${expired ? 0 : options.maxAge}`);
+    if (options.httpOnly) a.push('HttpOnly');
+    if (options.secure) a.push('Secure');
+    if (options.sameSite) {
       const capitalizedSameSite =
-        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
+        options.sameSite.charAt(0).toUpperCase() +
+        options.sameSite.slice(1).toLowerCase();
       a.push(`SameSite=${capitalizedSameSite}`);
     }
-    if (o.priority) a.push(`Priority=${o.priority}`);
-    if (o.partitioned) a.push('Partitioned');
+    if (options.priority) a.push(`Priority=${options.priority}`);
+    if (options.partitioned) a.push('Partitioned');
     return a.join('; ');
   }
 
-  abstract getSession(request: TRequest): Promise<string | null>;
+  abstract getCookie(request: TRequest, name: string): Promise<string | null>;
 
-  async saveSession(
+  async setCookie(
     response: TResponse | undefined,
-    sessionData: string,
+    name: string,
+    value: string,
+    options: CookieOptions,
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const header = this.buildSetCookie(sessionData);
+    const header = this.serializeCookie(name, value, options);
     const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
     return mutated ?? { headers: { 'Set-Cookie': header } };
   }
 
-  async clearSession(
-    response: TResponse,
+  async clearCookie(
+    response: TResponse | undefined,
+    name: string,
+    options: CookieOptions,
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const header = this.buildSetCookie('', true);
+    const header = this.serializeCookie(name, '', options, { expired: true });
     const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
     return mutated ?? { headers: { 'Set-Cookie': header } };
+  }
+
+  getSession(request: TRequest): Promise<string | null> {
+    return this.getCookie(request, this.cookieName);
+  }
+
+  saveSession(
+    response: TResponse | undefined,
+    sessionData: string,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    return this.setCookie(
+      response,
+      this.cookieName,
+      sessionData,
+      this.cookieOptions,
+    );
+  }
+
+  clearSession(
+    response: TResponse | undefined,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    return this.clearCookie(response, this.cookieName, this.cookieOptions);
   }
 }

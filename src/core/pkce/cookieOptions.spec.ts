@@ -1,8 +1,5 @@
 import type { AuthKitConfig } from '../config/types.js';
-import {
-  getPKCECookieOptions,
-  serializePKCESetCookie,
-} from './cookieOptions.js';
+import { getPKCECookieOptions } from './cookieOptions.js';
 
 const baseConfig: AuthKitConfig = {
   clientId: 'client_test',
@@ -96,12 +93,6 @@ describe('getPKCECookieOptions', () => {
       expect(opts.httpOnly).toBe(true);
     });
 
-    it('always sets name=wos-auth-verifier', () => {
-      const opts = getPKCECookieOptions(baseConfig);
-
-      expect(opts.name).toBe('wos-auth-verifier');
-    });
-
     it('always sets maxAge=600', () => {
       const opts = getPKCECookieOptions(baseConfig);
 
@@ -178,63 +169,5 @@ describe('getPKCECookieOptions', () => {
 
       expect(opts.domain).toBeUndefined();
     });
-  });
-});
-
-describe('serializePKCESetCookie', () => {
-  const opts = getPKCECookieOptions(baseConfig);
-
-  it('serializes live cookie with standard fields', () => {
-    const header = serializePKCESetCookie(opts, 'sealed-value');
-
-    expect(header).toContain('wos-auth-verifier=sealed-value');
-    expect(header).toContain('Path=/callback');
-    expect(header).toContain('Max-Age=600');
-    expect(header).toContain('HttpOnly');
-    expect(header).toContain('Secure');
-    expect(header).toContain('SameSite=Lax');
-  });
-
-  it('URL-encodes the value', () => {
-    const header = serializePKCESetCookie(opts, 'a=b;c');
-
-    expect(header).toContain('wos-auth-verifier=a%3Db%3Bc');
-  });
-
-  it('emits expired variant with Max-Age=0 and empty value', () => {
-    const header = serializePKCESetCookie(opts, '', { expired: true });
-
-    expect(header).toContain('wos-auth-verifier=;');
-    expect(header).toContain('Max-Age=0');
-  });
-
-  it('includes Domain when present in options', () => {
-    const optsWithDomain = getPKCECookieOptions({
-      ...baseConfig,
-      cookieDomain: '.example.com',
-    });
-    const header = serializePKCESetCookie(optsWithDomain, 'v');
-
-    expect(header).toContain('Domain=.example.com');
-  });
-
-  it('capitalizes sameSite correctly for none', () => {
-    const noneOpts = getPKCECookieOptions({
-      ...baseConfig,
-      cookieSameSite: 'none',
-    });
-    const header = serializePKCESetCookie(noneOpts, 'v');
-
-    expect(header).toContain('SameSite=None');
-  });
-
-  it('omits Secure when secure=false', () => {
-    const httpOpts = getPKCECookieOptions({
-      ...baseConfig,
-      redirectUri: 'http://localhost:3000/callback',
-    });
-    const header = serializePKCESetCookie(httpOpts, 'v');
-
-    expect(header).not.toContain('Secure');
   });
 });

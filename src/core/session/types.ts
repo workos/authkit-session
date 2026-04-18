@@ -72,9 +72,50 @@ export interface Session {
   impersonator?: Impersonator;
 }
 
+/**
+ * Map of HTTP response headers.
+ *
+ * `Set-Cookie` MUST be represented as `string[]` when multiple values exist
+ * — adapters must append each entry as its own header, never comma-join.
+ * A comma-joined `Set-Cookie` string is not a valid single HTTP header.
+ */
 export type HeadersBag = Record<string, string | string[]>;
 
 export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
+  /**
+   * Read a named cookie from a request.
+   * @param request Framework-specific request object.
+   * @param name Cookie name.
+   * @returns The cookie value or null if absent.
+   */
+  getCookie(request: TRequest, name: string): Promise<string | null>;
+
+  /**
+   * Write a named cookie to a response.
+   * @param response Framework-specific response object (or undefined to emit headers only).
+   * @param name Cookie name.
+   * @param value Cookie value (will be URL-encoded).
+   * @param options Per-call cookie options.
+   */
+  setCookie(
+    response: TResponse | undefined,
+    name: string,
+    value: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
+
+  /**
+   * Clear a named cookie by emitting a Set-Cookie with Max-Age=0.
+   * @param response Framework-specific response object (or undefined to emit headers only).
+   * @param name Cookie name.
+   * @param options Cookie options (must match those used at set time, especially `path`).
+   */
+  clearCookie(
+    response: TResponse | undefined,
+    name: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
+
   /*
    * Extract session data from a request object
    * @param request the framework-specific request object.
@@ -123,40 +164,13 @@ export interface SessionEncryption {
 }
 
 /**
- * Cookie options for the PKCE verifier cookie (`wos-auth-verifier`).
+ * Result shape returned by `createAuthorization` / `createSignIn` / `createSignUp`.
  *
- * Shape is intentionally narrower than the generic `CookieOptions`:
- * - `name` and `maxAge` are literal types — the contract hardcodes them.
- * - `sameSite` excludes `'strict'` — the strict→lax downgrade happens at
- *   construction time so the browser can send the cookie on the cross-site
- *   redirect back from WorkOS.
- * - `httpOnly` is a literal `true` — no way to accidentally construct PKCE
- *   options without it.
- * - `path` is derived from the redirect URI pathname so multiple AuthKit
- *   apps on the same host don't collide on a shared `wos-auth-verifier`
- *   cookie slot. Falls back to `/` if the redirect URI is missing/invalid.
- */
-export interface PKCECookieOptions {
-  name: 'wos-auth-verifier';
-  path: string;
-  httpOnly: true;
-  secure: boolean;
-  sameSite: 'lax' | 'none';
-  maxAge: 600;
-  domain?: string;
-}
-
-/**
- * Result shape returned by `getAuthorizationUrl` / `getSignInUrl` / `getSignUpUrl`.
- *
- * Adapters set a cookie with `sealedState` as the value using `cookieOptions`,
- * then redirect the browser to `url`. On callback, adapters read the cookie
- * and pass both it and the URL's `state` param to `handleCallback`.
+ * The verifier cookie is written internally via `SessionStorage.setCookie` — callers
+ * only need to redirect the browser to `url` and apply any returned `headers`/`response`.
  */
 export interface GetAuthorizationUrlResult {
   url: string;
-  sealedState: string;
-  cookieOptions: PKCECookieOptions;
 }
 
 export interface CookieOptions {

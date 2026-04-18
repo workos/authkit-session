@@ -28,14 +28,49 @@ const mockUser = {
   metadata: {},
 } as const;
 
-const mockStorage = {
-  getSession: async () => 'encrypted-session-data',
-  saveSession: async () => ({ response: 'updated-response' }),
-  clearSession: async () => ({
-    response: 'cleared-response',
-    headers: { 'Set-Cookie': 'wos-session=; Path=/; Max-Age=0' },
-  }),
-};
+/**
+ * Storage mock that remembers the last value passed to setCookie so
+ * handleCallback's getCookie read sees what sign-in wrote. Exposes the most
+ * recent options per cookie name for path/scope assertions.
+ */
+function makeStorage(initialSession: string | null = 'encrypted-session-data') {
+  const cookies = new Map<string, string>();
+  const lastSetOptions = new Map<string, any>();
+  const lastClearOptions = new Map<string, any>();
+  return {
+    cookies,
+    lastSetOptions,
+    lastClearOptions,
+    getSession: async () => initialSession,
+    getCookie: async (_req: any, name: string) => cookies.get(name) ?? null,
+    setCookie: async (_res: any, name: string, value: string, options: any) => {
+      cookies.set(name, value);
+      lastSetOptions.set(name, options);
+      return {
+        headers: {
+          'Set-Cookie': `${name}=${value}; Path=${options.path}; Max-Age=${options.maxAge}`,
+        },
+      };
+    },
+    clearCookie: async (_res: any, name: string, options: any) => {
+      lastClearOptions.set(name, options);
+      cookies.delete(name);
+      return {
+        headers: {
+          'Set-Cookie': `${name}=; Path=${options.path}; Max-Age=0`,
+        },
+      };
+    },
+    saveSession: async () => ({
+      response: 'updated-response',
+      headers: { 'Set-Cookie': 'wos-session=encrypted; Path=/; Max-Age=3600' },
+    }),
+    clearSession: async () => ({
+      response: 'cleared-response',
+      headers: { 'Set-Cookie': 'wos-session=; Path=/; Max-Age=0' },
+    }),
+  };
+}
 
 const testVerifier = 'test-verifier-abcdefghijklmnopqrstuvwxyz1234567890';
 
@@ -85,11 +120,13 @@ const mockEncryptionSessionShape = {
 
 describe('AuthService', () => {
   let service: AuthService<any, any>;
+  let storage: ReturnType<typeof makeStorage>;
 
   beforeEach(() => {
+    storage = makeStorage();
     service = new AuthService(
       mockConfig as any,
-      mockStorage as any,
+      storage as any,
       makeClient() as any,
       mockEncryptionSessionShape as any,
     );
@@ -103,10 +140,7 @@ describe('AuthService', () => {
 
   describe('withAuth()', () => {
     it('returns null user when no session exists', async () => {
-      const emptyStorage = {
-        ...mockStorage,
-        getSession: async () => null,
-      };
+      const emptyStorage = makeStorage(null);
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
@@ -129,7 +163,7 @@ describe('AuthService', () => {
       };
       const testService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        storage as any,
         makeClient() as any,
         failingEncryption as any,
       );
@@ -149,10 +183,7 @@ describe('AuthService', () => {
     });
 
     it('returns null when no session exists', async () => {
-      const emptyStorage = {
-        ...mockStorage,
-        getSession: async () => null,
-      };
+      const emptyStorage = makeStorage(null);
       const testService = new AuthService(
         mockConfig as any,
         emptyStorage as any,
@@ -192,79 +223,113 @@ describe('AuthService', () => {
     });
   });
 
-  describe('getAuthorizationUrl()', () => {
-    it('returns url + sealedState + cookieOptions triple', async () => {
-      const client = makeClient();
+  describe('createAuthorization()', () => {
+    it('returns url and writes the verifier cookie via storage.setCookie', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
-        client as any,
+        realStorage as any,
+        makeClient() as any,
         sessionEncryption,
       );
 
-      const result = await realService.getAuthorizationUrl();
+      const result = await realService.createAuthorization('res');
 
       expect(result.url).toContain('authorize');
-      expect(result.sealedState.length).toBeGreaterThan(0);
-      expect(result.cookieOptions.name).toBe('wos-auth-verifier');
+      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
+      expect(result.headers?.['Set-Cookie']).toContain('wos-auth-verifier=');
+      // Default path from config.redirectUri pathname
+      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.path).toBe(
+        '/callback',
+      );
     });
-  });
 
-  describe('getSignInUrl()', () => {
-    it('returns sign-in URL in the triple shape', async () => {
+    it('scopes the verifier cookie path to a per-call redirectUri override', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
 
-      const result = await realService.getSignInUrl();
+      await realService.createAuthorization('res', {
+        redirectUri: 'https://app.example.com/custom/callback',
+      });
+
+      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.path).toBe(
+        '/custom/callback',
+      );
+    });
+  });
+
+  describe('createSignIn()', () => {
+    it('returns sign-in URL and writes the verifier cookie', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const result = await realService.createSignIn('res');
 
       expect(result.url).toContain('screen_hint=sign-in');
+      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
     });
   });
 
-  describe('getSignUpUrl()', () => {
-    it('returns sign-up URL in the triple shape', async () => {
+  describe('createSignUp()', () => {
+    it('returns sign-up URL and writes the verifier cookie', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
 
-      const result = await realService.getSignUpUrl();
+      const result = await realService.createSignUp('res');
 
       expect(result.url).toContain('screen_hint=sign-up');
+      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
     });
   });
 
-  describe('getPKCECookieOptions()', () => {
-    it('returns PKCE cookie options derived from config', () => {
-      const opts = service.getPKCECookieOptions();
+  describe('clearPendingVerifier()', () => {
+    it('emits a delete cookie with the config-default path', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
 
-      expect(opts.name).toBe('wos-auth-verifier');
-      expect(opts.path).toBe('/callback'); // scoped from config redirectUri
-      expect(opts.httpOnly).toBe(true);
-      expect(opts.maxAge).toBe(600);
-      expect(opts.secure).toBe(true); // https redirectUri
+      await realService.clearPendingVerifier('res');
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/callback',
+      );
     });
 
-    it('derives secure from explicit redirectUri arg', () => {
-      const opts = service.getPKCECookieOptions('http://localhost:3000/cb');
+    it('emits a delete cookie with a per-call redirectUri override path', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
 
-      expect(opts.secure).toBe(false);
-    });
-  });
+      await realService.clearPendingVerifier('res', {
+        redirectUri: 'https://app.example.com/custom/callback',
+      });
 
-  describe('buildPKCEDeleteCookieHeader()', () => {
-    it('returns a Set-Cookie header deleting the verifier cookie', () => {
-      const header = service.buildPKCEDeleteCookieHeader();
-
-      expect(header).toContain('wos-auth-verifier=;');
-      expect(header).toContain('Max-Age=0');
-      expect(header).toContain('HttpOnly');
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/custom/callback',
+      );
     });
   });
 
@@ -278,24 +343,25 @@ describe('AuthService', () => {
   });
 
   describe('handleCallback()', () => {
-    it('round-trips through getAuthorizationUrl → handleCallback', async () => {
+    it('round-trips through createSignIn → handleCallback', async () => {
       const capture: { authCall?: Record<string, unknown> } = {};
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient(capture) as any,
         sessionEncryption,
       );
 
-      const { sealedState } = await realService.getAuthorizationUrl({
+      await realService.createAuthorization('res', {
         returnPathname: '/dashboard',
         state: 'my.custom.state',
       });
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'auth-code-xyz',
         state: sealedState,
-        cookieValue: sealedState,
       });
 
       expect(result.authResponse.accessToken).toBe('access-auth-code-xyz');
@@ -304,80 +370,163 @@ describe('AuthService', () => {
       expect(capture.authCall?.codeVerifier).toBe(testVerifier);
     });
 
-    it('throws OAuthStateMismatchError when cookieValue differs from state', async () => {
+    it('returns both session and verifier-delete Set-Cookie as a string[]', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
 
-      const { sealedState } = await realService.getAuthorizationUrl();
-      // Tamper one byte in the cookie copy
-      const tampered = sealedState.slice(0, -2) + 'XX';
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      const result = await realService.handleCallback('req', 'res', {
+        code: 'code',
+        state: sealedState,
+      });
+
+      const setCookie = result.headers?.['Set-Cookie'];
+      expect(Array.isArray(setCookie)).toBe(true);
+      expect(setCookie).toHaveLength(2);
+      expect(
+        (setCookie as string[]).some(c => c.startsWith('wos-session=')),
+      ).toBe(true);
+      expect(
+        (setCookie as string[]).some(c => c.startsWith('wos-auth-verifier=')),
+      ).toBe(true);
+      expect(
+        (setCookie as string[]).find(c => c.startsWith('wos-auth-verifier=')),
+      ).toContain('Max-Age=0');
+    });
+
+    it('emits the verifier-delete cookie with the default config path', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      await realService.handleCallback('req', 'res', {
+        code: 'code',
+        state: sealedState,
+      });
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/callback',
+      );
+    });
+
+    it('emits the verifier-delete cookie with the per-call redirectUri path when overridden at sign-in', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res', {
+        redirectUri: 'https://app.example.com/a/callback',
+      });
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      await realService.handleCallback('req', 'res', {
+        code: 'code',
+        state: sealedState,
+      });
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/a/callback',
+      );
+    });
+
+    it('throws OAuthStateMismatchError when storage cookie differs from url state', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      // Tamper the stored cookie after sign-in
+      realStorage.cookies.set(
+        'wos-auth-verifier',
+        sealedState.slice(0, -2) + 'XX',
+      );
 
       await expect(
         realService.handleCallback('req', 'res', {
           code: 'code',
           state: sealedState,
-          cookieValue: tampered,
         }),
       ).rejects.toThrow(OAuthStateMismatchError);
     });
 
-    it('throws PKCECookieMissingError when cookieValue is undefined', async () => {
+    it('throws PKCECookieMissingError when storage has no verifier cookie', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
 
-      const { sealedState } = await realService.getAuthorizationUrl();
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      realStorage.cookies.delete('wos-auth-verifier');
 
       await expect(
         realService.handleCallback('req', 'res', {
           code: 'code',
           state: sealedState,
-          cookieValue: undefined,
         }),
       ).rejects.toThrow(PKCECookieMissingError);
     });
 
     it('throws OAuthStateMismatchError when state is undefined', async () => {
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
+        realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
+
+      await realService.createAuthorization('res');
 
       await expect(
         realService.handleCallback('req', 'res', {
           code: 'code',
           state: undefined,
-          cookieValue: 'something',
         }),
       ).rejects.toThrow(OAuthStateMismatchError);
     });
 
     it('defaults returnPathname to "/" when the sealed state omits it', async () => {
-      const capture: { authCall?: Record<string, unknown> } = {};
+      const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
-        mockStorage as any,
-        makeClient(capture) as any,
+        realStorage as any,
+        makeClient() as any,
         sessionEncryption,
       );
 
-      const { sealedState } = await realService.getAuthorizationUrl({
-        // no returnPathname
-      });
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'c',
         state: sealedState,
-        cookieValue: sealedState,
       });
 
       expect(result.returnPathname).toBe('/');

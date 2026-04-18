@@ -72,13 +72,12 @@ export function createAuthService<TRequest, TResponse>(options: {
       getService().switchOrganization(session, organizationId),
     refreshSession: (session, organizationId) =>
       getService().refreshSession(session, organizationId),
-    getAuthorizationUrl: opts => getService().getAuthorizationUrl(opts),
-    getSignInUrl: opts => getService().getSignInUrl(opts),
-    getSignUpUrl: opts => getService().getSignUpUrl(opts),
-    getPKCECookieOptions: redirectUri =>
-      getService().getPKCECookieOptions(redirectUri),
-    buildPKCEDeleteCookieHeader: redirectUri =>
-      getService().buildPKCEDeleteCookieHeader(redirectUri),
+    createAuthorization: (response, opts) =>
+      getService().createAuthorization(response, opts),
+    createSignIn: (response, opts) => getService().createSignIn(response, opts),
+    createSignUp: (response, opts) => getService().createSignUp(response, opts),
+    clearPendingVerifier: (response, opts) =>
+      getService().clearPendingVerifier(response, opts),
     getWorkOS: () => getService().getWorkOS(),
     handleCallback: (request, response, opts) =>
       getService().handleCallback(request, response, opts),

@@ -58,16 +58,16 @@ export class MyFrameworkStorage extends CookieSessionStorage<
   Request,
   Response
 > {
-  async getSession(request: Request): Promise<string | null> {
+  async getCookie(request: Request, name: string): Promise<string | null> {
     const cookieHeader = request.headers.get('cookie');
     if (!cookieHeader) return null;
-    return parseCookieHeader(cookieHeader)[this.cookieName] ?? null;
+    return parseCookieHeader(cookieHeader)[name] ?? null;
   }
 
   // Optional: override if your framework can mutate responses
   protected async applyHeaders(
     response: Response | undefined,
-    headers: Record<string, string>,
+    headers: Record<string, string | string[]>,
   ): Promise<{ response: Response }> {
     const newResponse = response
       ? new Response(response.body, {
@@ -77,16 +77,20 @@ export class MyFrameworkStorage extends CookieSessionStorage<
         })
       : new Response();
 
-    Object.entries(headers).forEach(([key, value]) => {
-      newResponse.headers.append(key, value);
-    });
+    for (const [key, value] of Object.entries(headers)) {
+      if (Array.isArray(value)) {
+        for (const v of value) newResponse.headers.append(key, v);
+      } else {
+        newResponse.headers.append(key, value);
+      }
+    }
 
     return { response: newResponse };
   }
 }
 ```
 
-`CookieSessionStorage` provides `this.cookieName`, `this.cookieOptions`, `buildSetCookie()`, and implements `saveSession()`/`clearSession()` using your `applyHeaders()`.
+`CookieSessionStorage` provides `this.cookieName`, `this.cookieOptions`, and generic `setCookie`/`clearCookie`/`serializeCookie` primitives. `getSession`/`saveSession`/`clearSession` are one-line wrappers — you only implement `getCookie`.
 
 ### 3. Create Service
 
@@ -174,24 +178,23 @@ Environment variables override programmatic config.
 ```typescript
 // Authentication
 authService.withAuth(request)                    // → { auth, refreshedSessionData? }
-authService.handleCallback(request, response, { code, state, cookieValue })
+authService.handleCallback(request, response, { code, state })
 authService.getSession(request)                  // → Session | null
 authService.saveSession(response, sessionData)   // → { response?, headers? }
 authService.clearSession(response)
 
 // WorkOS Operations
-authService.signOut(sessionId, { returnTo })     // → { logoutUrl, clearCookieHeader }
+authService.signOut(sessionId, { returnTo })     // → { logoutUrl, response?, headers? }
 authService.refreshSession(session, organizationId?)
 authService.switchOrganization(session, organizationId)
 
-// URL Generation — return { url, sealedState, cookieOptions }
-authService.getAuthorizationUrl(options)
-authService.getSignInUrl(options)
-authService.getSignUpUrl(options)
+// URL Generation — write verifier cookie, return { url, response?, headers? }
+authService.createAuthorization(response, options)
+authService.createSignIn(response, options)
+authService.createSignUp(response, options)
 
-// PKCE cookie helpers — so adapters never need to read config directly
-authService.getPKCECookieOptions(redirectUri?)     // → PKCECookieOptions
-authService.buildPKCEDeleteCookieHeader(redirectUri?)  // → Set-Cookie string
+// Error-path cleanup for the PKCE verifier cookie
+authService.clearPendingVerifier(response, { redirectUri? })
 ```
 
 ### PKCE verifier cookie (`wos-auth-verifier`)
@@ -204,30 +207,36 @@ The verifier is sealed into a single blob that serves two roles:
 1. It is sent to WorkOS as the OAuth `state` query parameter.
 2. It is set as a short-lived HTTP-only cookie (`wos-auth-verifier`, 10 min).
 
-On callback, the adapter passes BOTH channels to `handleCallback`:
+The cookie is written and read through `SessionStorage`. Callers don't see
+sealed blobs or cookie options:
 
 ```typescript
-// Sign in: set the verifier cookie, redirect to `url`
-const { url, sealedState, cookieOptions } = await authService.getSignInUrl({
+// Sign in: library writes the verifier cookie via storage, returns the URL + headers
+const { url, headers } = await authService.createSignIn(response, {
   returnPathname: '/dashboard',
 });
-response.setHeader(
-  'Set-Cookie',
-  serializePKCESetCookie(cookieOptions, sealedState),
-);
-return redirect(url);
+return new Response(null, {
+  status: 302,
+  headers: { ...headers, Location: url },
+});
 
-// Callback: pass both channels; the library byte-compares before decrypting
+// Callback: library reads the verifier via storage, byte-compares, then exchanges
 await authService.handleCallback(request, response, {
   code,
   state, // from URL
-  cookieValue: request.cookies.get('wos-auth-verifier'),
 });
 ```
 
+On success, `handleCallback` returns `headers['Set-Cookie']` as a `string[]`
+with two entries — the session cookie AND a clear for the verifier cookie.
+Adapters must append each entry as its own `Set-Cookie` HTTP header (never
+comma-join).
+
 Mismatched state and cookie raise `OAuthStateMismatchError`. A missing cookie
 (typical cause: Set-Cookie stripped by a proxy) raises
-`PKCECookieMissingError` with deployment guidance in the message.
+`PKCECookieMissingError`. On either error path — or any early bail-out before
+`handleCallback` runs — call `authService.clearPendingVerifier(response)` to
+emit a delete header.
 
 ### Direct Access (Advanced)
 

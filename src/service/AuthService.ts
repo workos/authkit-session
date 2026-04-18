@@ -1,10 +1,8 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
-import {
-  getPKCECookieOptions,
-  serializePKCESetCookie,
-} from '../core/pkce/cookieOptions.js';
+import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
+import { PKCE_COOKIE_NAME } from '../core/pkce/constants.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -12,11 +10,35 @@ import type {
   GetAuthorizationUrlOptions,
   GetAuthorizationUrlResult,
   HeadersBag,
-  PKCECookieOptions,
   Session,
   SessionEncryption,
   SessionStorage,
 } from '../core/session/types.js';
+
+/**
+ * Merge two `HeadersBag` values. `Set-Cookie` values are concatenated into a
+ * `string[]` so multiple cookies emitted on the same response survive as
+ * distinct HTTP headers. Other keys are shallow-merged (second wins).
+ */
+function mergeHeaderBags(
+  a: HeadersBag | undefined,
+  b: HeadersBag | undefined,
+): HeadersBag | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const merged: HeadersBag = { ...a };
+  for (const [key, value] of Object.entries(b)) {
+    if (key === 'Set-Cookie' && merged[key] !== undefined) {
+      const left = merged[key];
+      const leftArr = Array.isArray(left) ? left : [left];
+      const rightArr = Array.isArray(value) ? value : [value];
+      merged[key] = [...leftArr, ...rightArr];
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
 
 /**
  * Framework-agnostic authentication service.
@@ -29,7 +51,7 @@ import type {
  * Provides common patterns:
  * - `withAuth()` - Validate session with auto-refresh
  * - `handleCallback()` - Process OAuth callback
- * - `signOut()`, `getSignInUrl()`, etc. - Delegate to AuthOperations
+ * - `signOut()`, `createSignIn()`, etc. - Delegate to AuthOperations
  *
  * **Used by:** @workos/authkit-tanstack-react-start
  */
@@ -185,50 +207,81 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
-   * Get authorization URL - delegates to AuthOperations.
+   * Create an authorization URL and write the PKCE verifier cookie.
+   *
+   * @param response - Framework-specific response object (may be undefined —
+   *   adapters that mutate responses in-place will get back a mutated copy).
+   * @param options - screenHint, returnPathname, custom state, redirectUri, etc.
+   * @returns The URL to redirect the browser to, plus storage's
+   *   `{ response?, headers? }` carrying the verifier `Set-Cookie`.
    */
-  async getAuthorizationUrl(
+  async createAuthorization(
+    response: TResponse | undefined,
     options: GetAuthorizationUrlOptions = {},
-  ): Promise<GetAuthorizationUrlResult> {
-    return this.operations.getAuthorizationUrl(options);
-  }
-
-  /**
-   * Convenience: Get sign-in URL.
-   */
-  async getSignInUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<GetAuthorizationUrlResult> {
-    return this.operations.getSignInUrl(options);
-  }
-
-  /**
-   * Convenience: Get sign-up URL.
-   */
-  async getSignUpUrl(
-    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<GetAuthorizationUrlResult> {
-    return this.operations.getSignUpUrl(options);
-  }
-
-  /**
-   * Get PKCE verifier cookie options for the given redirect URI.
-   */
-  getPKCECookieOptions(redirectUri?: string): PKCECookieOptions {
-    return getPKCECookieOptions(this.config, redirectUri);
-  }
-
-  /**
-   * Build a ready-to-emit `Set-Cookie` header that deletes the
-   * `wos-auth-verifier` cookie. Adapters typically compute this once at the
-   * top of their callback handler and append it on every exit path.
-   */
-  buildPKCEDeleteCookieHeader(redirectUri?: string): string {
-    return serializePKCESetCookie(
-      getPKCECookieOptions(this.config, redirectUri),
-      '',
-      { expired: true },
+  ): Promise<
+    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
+  > {
+    const { url, sealedState, cookieOptions } =
+      await this.operations.createAuthorization(options);
+    const write = await this.storage.setCookie(
+      response,
+      PKCE_COOKIE_NAME,
+      sealedState,
+      cookieOptions,
     );
+    return { url, ...write };
+  }
+
+  /**
+   * Convenience: Create sign-in URL and write the PKCE verifier cookie.
+   */
+  async createSignIn(
+    response: TResponse | undefined,
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ): Promise<
+    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
+  > {
+    return this.createAuthorization(response, {
+      ...options,
+      screenHint: 'sign-in',
+    });
+  }
+
+  /**
+   * Convenience: Create sign-up URL and write the PKCE verifier cookie.
+   */
+  async createSignUp(
+    response: TResponse | undefined,
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ): Promise<
+    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
+  > {
+    return this.createAuthorization(response, {
+      ...options,
+      screenHint: 'sign-up',
+    });
+  }
+
+  /**
+   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie.
+   *
+   * Use on any exit path where a sign-in was started (verifier cookie
+   * written) but `handleCallback` will not run to clear it — OAuth error
+   * responses, missing `code`, early bail-outs.
+   *
+   * Pass the same `redirectUri` that was supplied to `createSignIn`
+   * (if any) so the emitted `Path` matches the cookie's original scope —
+   * otherwise the browser retains the cookie until its Max-Age expires.
+   */
+  async clearPendingVerifier(
+    response: TResponse,
+    options?: { redirectUri?: string },
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const cookieOptions = getPKCECookieOptions(
+      this.config,
+      options?.redirectUri,
+    );
+    return this.storage.clearCookie(response, PKCE_COOKIE_NAME, cookieOptions);
   }
 
   /**
@@ -242,27 +295,30 @@ export class AuthService<TRequest, TResponse> {
   /**
    * Handle OAuth callback.
    *
-   * Verifies the PKCE state cookie against the URL state, extracts the
-   * sealed `codeVerifier`, exchanges the code, and creates a new session.
-   *
-   * `cookieValue` is `string | undefined` (not optional) to force every
-   * adapter to explicitly pass what they read from the request — silent
-   * omission would be a bug.
+   * Reads the verifier cookie via storage, verifies it against the URL
+   * `state`, exchanges the code, saves the session, and — on success —
+   * also emits a verifier-delete `Set-Cookie` so `HeadersBag['Set-Cookie']`
+   * carries both entries as a `string[]`. Adapters MUST append each
+   * `Set-Cookie` as its own header (never comma-join).
    */
   async handleCallback(
-    _request: TRequest,
+    request: TRequest,
     response: TResponse,
     options: {
       code: string;
       state: string | undefined;
-      cookieValue: string | undefined;
     },
   ) {
-    const { codeVerifier, returnPathname, customState } =
-      await this.core.verifyCallbackState({
-        stateFromUrl: options.state,
-        cookieValue: options.cookieValue,
-      });
+    const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
+    const {
+      codeVerifier,
+      returnPathname,
+      customState,
+      redirectUri: sealedRedirectUri,
+    } = await this.core.verifyCallbackState({
+      stateFromUrl: options.state,
+      cookieValue: cookieValue ?? undefined,
+    });
 
     const authResponse = await this.client.userManagement.authenticateWithCode({
       code: options.code,
@@ -278,14 +334,19 @@ export class AuthService<TRequest, TResponse> {
     };
 
     const encryptedSession = await this.core.encryptSession(session);
-    const { response: updatedResponse, headers } = await this.saveSession(
-      response,
-      encryptedSession,
+    const save = await this.storage.saveSession(response, encryptedSession);
+    // Use the redirectUri sealed into the state at sign-in time (when the
+    // caller overrode the default) so the clear's `Path=` matches the
+    // cookie's original scope — prevents an orphan verifier cookie.
+    const clear = await this.storage.clearCookie(
+      save.response ?? response,
+      PKCE_COOKIE_NAME,
+      getPKCECookieOptions(this.config, sealedRedirectUri),
     );
 
     return {
-      response: updatedResponse,
-      headers,
+      response: clear.response ?? save.response,
+      headers: mergeHeaderBags(save.headers, clear.headers),
       returnPathname: returnPathname ?? '/',
       state: customState,
       authResponse,
