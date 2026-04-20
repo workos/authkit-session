@@ -278,14 +278,19 @@ export class AuthService<TRequest, TResponse> {
    * Use on any exit path where a sign-in was started (verifier cookie
    * written) but `handleCallback` will not run to clear it — OAuth error
    * responses, missing `code`, early bail-outs.
+   *
+   * Pass `options.redirectUri` on requests that used a per-request
+   * `redirectUri` override at sign-in time, so the delete cookie's computed
+   * attributes (notably `secure`) match what was originally set.
    */
   async clearPendingVerifier(
     response: TResponse | undefined,
+    options?: Pick<GetAuthorizationUrlOptions, 'redirectUri'>,
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
     return this.storage.clearCookie(
       response,
       PKCE_COOKIE_NAME,
-      getPKCECookieOptions(this.config),
+      getPKCECookieOptions(this.config, options?.redirectUri),
     );
   }
 
