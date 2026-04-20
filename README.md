@@ -170,7 +170,7 @@ auth.claims.sid; // string
 | `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key                       |
 | `WORKOS_REDIRECT_URI`     | `redirectUri`    | OAuth callback URL                   |
 | `WORKOS_COOKIE_PASSWORD`  | `cookiePassword` | 32+ char encryption key              |
-| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos_session`) |
+| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos-session`) |
 | `WORKOS_COOKIE_MAX_AGE`   | `cookieMaxAge`   | Cookie lifetime in seconds           |
 | `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                        |
 | `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`           |
@@ -234,10 +234,21 @@ await authService.handleCallback(request, response, {
 });
 ```
 
-On success, `handleCallback` returns `headers['Set-Cookie']` as a `string[]`
-with two entries — the session cookie AND a clear for the verifier cookie.
-Adapters must append each entry as its own `Set-Cookie` HTTP header (never
-comma-join).
+On success, `handleCallback` returns a `Set-Cookie` entry in `headers` as a
+`string[]` with two values — the session cookie AND a clear for the verifier
+cookie. Adapters must append each entry as its own `Set-Cookie` HTTP header
+(never comma-join). The bag key is case-insensitive — `mergeHeaderBags`
+preserves the adapter's casing — so look it up that way:
+
+```ts
+const setCookie =
+  result.headers?.['Set-Cookie'] ?? result.headers?.['set-cookie'];
+if (setCookie) {
+  for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
+    response.headers.append('Set-Cookie', v);
+  }
+}
+```
 
 Mismatched state and cookie raise `OAuthStateMismatchError`. A missing cookie
 (typical cause: Set-Cookie stripped by a proxy) raises
@@ -253,14 +264,15 @@ For maximum control, use the primitives directly:
 import {
   AuthKitCore,
   AuthOperations,
+  getConfig,
   getWorkOS,
-  getConfigurationProvider,
+  sessionEncryption,
 } from '@workos/authkit-session';
 
-const config = getConfigurationProvider();
-const client = getWorkOS(config.getConfig());
-const core = new AuthKitCore(config, client, encryption);
-const operations = new AuthOperations(core, client, config, encryption);
+const config = getConfig();
+const client = getWorkOS(config);
+const core = new AuthKitCore(config, client, sessionEncryption);
+const operations = new AuthOperations(core, client, config, sessionEncryption);
 
 // Use core.validateAndRefresh(), core.encryptSession(), etc.
 ```
@@ -268,7 +280,7 @@ const operations = new AuthOperations(core, client, config, encryption);
 ## Technical Details
 
 - **JWKS Caching**: Keys fetched on-demand, cached for process lifetime. `jose` handles key rotation automatically.
-- **Token Expiry Buffer**: 60 seconds default. Tokens refresh before actual expiry.
+- **Token Refresh**: `validateAndRefresh` refreshes when `verifyToken` fails (i.e. when the access token is expired or invalid). `isTokenExpiring(token, buffer)` is available as a separate helper for callers that want to proactively refresh before expiry.
 - **Session Encryption**: AES-256-CBC + SHA-256 HMAC via `iron-webcrypto`.
 - **Lazy Initialization**: `createAuthService()` defers initialization until first use, allowing `configure()` to be called later.
 

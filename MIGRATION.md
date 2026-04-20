@@ -82,11 +82,14 @@ via `storage.getCookie` and byte-compares it against `state` before exchanging
 the code. If `state` is missing from the URL, `OAuthStateMismatchError` is
 thrown. If the cookie is missing, `PKCECookieMissingError` is thrown.
 
-**Success returns `headers['Set-Cookie']` as a `string[]`** — one entry for
-the session cookie, one entry clearing the verifier. Adapters **must append
-each value as its own `Set-Cookie` header** (never `.join(', ')`, never
+**Success returns a `Set-Cookie` entry as a `string[]`** — one value for
+the session cookie, one clearing the verifier. Adapters **must append each
+value as its own `Set-Cookie` header** (never `.join(', ')`, never
 `headers.set(...)` with an array — a comma-joined `Set-Cookie` is not a
 valid single HTTP header, and the browser will reject all but one cookie).
+
+The `headers` bag key is case-insensitive (see Section 8) — `mergeHeaderBags`
+preserves the adapter's casing, so check both:
 
 ```ts
 const result = await auth.handleCallback(request, response, {
@@ -94,7 +97,8 @@ const result = await auth.handleCallback(request, response, {
   state: url.searchParams.get('state') ?? undefined,
 });
 
-const setCookie = result.headers?.['Set-Cookie'];
+const setCookie =
+  result.headers?.['Set-Cookie'] ?? result.headers?.['set-cookie'];
 if (setCookie) {
   for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
     response.headers.append('Set-Cookie', v);
