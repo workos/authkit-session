@@ -11,7 +11,10 @@ export abstract class CookieSessionStorage<
   protected readonly cookieOptions: CookieOptions;
 
   constructor(config: AuthKitConfig) {
-    this.cookieName = config.cookieName ?? 'wos_session';
+    // Matches the canonical default in ConfigurationProvider. This fallback
+    // only fires when a caller instantiates the class with a config that
+    // hasn't been resolved through the provider.
+    this.cookieName = config.cookieName ?? 'wos-session';
 
     const sameSite = config.cookieSameSite ?? 'lax';
 
