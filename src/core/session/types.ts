@@ -199,7 +199,8 @@ export interface AuthUrlOptions {
 }
 
 /**
- * Options for getAuthorizationUrl, including screenHint
+ * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
+ * including the `screenHint` selector used by the sign-in/sign-up variants.
  */
 export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
   screenHint?: 'sign-up' | 'sign-in';

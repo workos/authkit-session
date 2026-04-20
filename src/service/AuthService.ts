@@ -18,7 +18,10 @@ import type {
 /**
  * Merge two `HeadersBag` values. `Set-Cookie` values are concatenated into a
  * `string[]` so multiple cookies emitted on the same response survive as
- * distinct HTTP headers. Other keys are shallow-merged (second wins).
+ * distinct HTTP headers. Matching is case-insensitive — adapters that
+ * normalize header keys through `Headers` objects commonly emit lowercase
+ * `set-cookie`, and losing the array-concat path silently drops one cookie.
+ * Other keys are shallow-merged (second wins; last casing wins).
  */
 function mergeHeaderBags(
   a: HeadersBag | undefined,
@@ -27,12 +30,20 @@ function mergeHeaderBags(
   if (!a) return b;
   if (!b) return a;
   const merged: HeadersBag = { ...a };
+  const existingSetCookieKey = Object.keys(merged).find(
+    (k) => k.toLowerCase() === 'set-cookie',
+  );
   for (const [key, value] of Object.entries(b)) {
-    if (key === 'Set-Cookie' && merged[key] !== undefined) {
-      const left = merged[key];
-      const leftArr = Array.isArray(left) ? left : [left];
-      const rightArr = Array.isArray(value) ? value : [value];
-      merged[key] = [...leftArr, ...rightArr];
+    if (key.toLowerCase() === 'set-cookie') {
+      const targetKey = existingSetCookieKey ?? key;
+      const left = merged[targetKey];
+      if (left === undefined) {
+        merged[targetKey] = value;
+      } else {
+        const leftArr = Array.isArray(left) ? left : [left];
+        const rightArr = Array.isArray(value) ? value : [value];
+        merged[targetKey] = [...leftArr, ...rightArr];
+      }
     } else {
       merged[key] = value;
     }
@@ -274,7 +285,7 @@ export class AuthService<TRequest, TResponse> {
    * otherwise the browser retains the cookie until its Max-Age expires.
    */
   async clearPendingVerifier(
-    response: TResponse,
+    response: TResponse | undefined,
     options?: { redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
     const cookieOptions = getPKCECookieOptions(

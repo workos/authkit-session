@@ -331,6 +331,20 @@ describe('AuthService', () => {
         '/custom/callback',
       );
     });
+
+    it('accepts undefined response for headers-only adapters', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const result = await realService.clearPendingVerifier(undefined);
+
+      expect(result.headers?.['Set-Cookie']).toContain('wos-auth-verifier=');
+    });
   });
 
   describe('getWorkOS()', () => {
@@ -399,6 +413,73 @@ describe('AuthService', () => {
       expect(
         (setCookie as string[]).find(c => c.startsWith('wos-auth-verifier=')),
       ).toContain('Max-Age=0');
+    });
+
+    it('merges lowercase set-cookie headers into an array (case-insensitive)', async () => {
+      // Adapters that normalize through Headers objects emit lowercase keys.
+      // Without case-insensitive merging, the second bag overwrites the first
+      // and one of the two cookies (session or verifier-delete) is lost.
+      const realStorage = makeStorage();
+      const lowerStorage = {
+        ...realStorage,
+        setCookie: async (
+          _res: any,
+          name: string,
+          value: string,
+          options: any,
+        ) => {
+          realStorage.cookies.set(name, value);
+          realStorage.lastSetOptions.set(name, options);
+          return {
+            headers: {
+              'set-cookie': `${name}=${value}; Path=${options.path}; Max-Age=${options.maxAge}`,
+            },
+          };
+        },
+        clearCookie: async (_res: any, name: string, options: any) => {
+          realStorage.lastClearOptions.set(name, options);
+          realStorage.cookies.delete(name);
+          return {
+            headers: {
+              'set-cookie': `${name}=; Path=${options.path}; Max-Age=0`,
+            },
+          };
+        },
+        saveSession: async () => ({
+          response: 'updated-response',
+          headers: {
+            'set-cookie': 'wos-session=encrypted; Path=/; Max-Age=3600',
+          },
+        }),
+      };
+      const realService = new AuthService(
+        mockConfig as any,
+        lowerStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      const result = await realService.handleCallback('req', 'res', {
+        code: 'code',
+        state: sealedState,
+      });
+
+      const bag = result.headers ?? {};
+      const setCookieKey = Object.keys(bag).find(
+        k => k.toLowerCase() === 'set-cookie',
+      )!;
+      const setCookie = bag[setCookieKey];
+      expect(Array.isArray(setCookie)).toBe(true);
+      expect(setCookie).toHaveLength(2);
+      expect(
+        (setCookie as string[]).some(c => c.startsWith('wos-session=')),
+      ).toBe(true);
+      expect(
+        (setCookie as string[]).some(c => c.startsWith('wos-auth-verifier=')),
+      ).toBe(true);
     });
 
     it('emits the verifier-delete cookie with the default config path', async () => {
