@@ -575,6 +575,68 @@ describe('AuthService', () => {
       );
     });
 
+    it('emits a scheme-agnostic (secure=false, sameSite=lax) delete on pre-unseal failure', async () => {
+      // Covers the edge case where a sign-in used an http:// redirectUri
+      // override (secure=false) but then the callback hits a pre-unseal
+      // error (state mismatch, tampered seal). We don't know the override
+      // at that point, so the fallback delete must drop Secure so the
+      // browser accepts the Set-Cookie over http://.
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        { ...mockConfig, cookieSameSite: 'lax' } as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      realStorage.cookies.set(
+        'wos-auth-verifier',
+        sealedState.slice(0, -2) + 'XX',
+      );
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow(OAuthStateMismatchError);
+
+      const clearOpts = realStorage.lastClearOptions.get('wos-auth-verifier');
+      expect(clearOpts?.secure).toBe(false);
+      expect(clearOpts?.sameSite).toBe('lax');
+      expect(clearOpts?.path).toBe('/');
+    });
+
+    it('keeps Secure on scheme-agnostic delete when sameSite=none (Secure is required)', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        { ...mockConfig, cookieSameSite: 'none' } as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      realStorage.cookies.set(
+        'wos-auth-verifier',
+        sealedState.slice(0, -2) + 'XX',
+      );
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow(OAuthStateMismatchError);
+
+      const clearOpts = realStorage.lastClearOptions.get('wos-auth-verifier');
+      expect(clearOpts?.secure).toBe(true);
+      expect(clearOpts?.sameSite).toBe('none');
+    });
+
     it('best-effort clears the verifier cookie on PKCECookieMissingError', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(

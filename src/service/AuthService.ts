@@ -323,11 +323,6 @@ export class AuthService<TRequest, TResponse> {
   ) {
     const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
 
-    // Pre-unseal errors (state mismatch, tampered seal) — we don't yet know
-    // the per-request redirectUri override, so fall back to the configured
-    // default. Cookies are Domain-scoped and Path=/, so the browser clears
-    // regardless; only `secure` may differ, which the browser ignores when
-    // matching the delete.
     let unsealed;
     try {
       unsealed = await this.core.verifyCallbackState({
@@ -335,7 +330,16 @@ export class AuthService<TRequest, TResponse> {
         cookieValue: cookieValue ?? undefined,
       });
     } catch (err) {
-      await this.bestEffortClearVerifier(response, undefined);
+      // Pre-unseal failure — we don't know the per-request redirectUri
+      // override, so emit a scheme-agnostic delete: same (name, domain,
+      // path) tuple as the original set (what the browser uses to match
+      // for replacement), with `Secure` dropped in the `sameSite: 'lax'`
+      // case so the Set-Cookie is accepted over http:// callbacks too.
+      // The `sameSite: 'none'` case already forces Secure on both set and
+      // clear, so there's no scheme-mismatch risk there.
+      await this.bestEffortClearVerifier(response, undefined, {
+        schemeAgnostic: true,
+      });
       throw err;
     }
 
@@ -384,17 +388,24 @@ export class AuthService<TRequest, TResponse> {
    * Mutates the response in place for response-mutating adapters.
    * Swallows storage errors — cleanup must never mask the original failure.
    * The original error is always rethrown by the caller.
+   *
+   * `schemeAgnostic` (pre-unseal failures only): drops the `Secure` attribute
+   * on the delete when `sameSite === 'lax'` so the browser accepts the
+   * `Set-Cookie` over http:// dev callbacks. Cookie replacement matches on
+   * (name, domain, path), not `Secure`, so the tuple-matched original cookie
+   * is still cleared regardless of its original `Secure` flag.
    */
   private async bestEffortClearVerifier(
     response: TResponse | undefined,
     redirectUri: string | undefined,
+    { schemeAgnostic = false }: { schemeAgnostic?: boolean } = {},
   ): Promise<void> {
+    const options = getPKCECookieOptions(this.config, redirectUri);
+    if (schemeAgnostic && options.sameSite === 'lax') {
+      options.secure = false;
+    }
     try {
-      await this.storage.clearCookie(
-        response,
-        PKCE_COOKIE_NAME,
-        getPKCECookieOptions(this.config, redirectUri),
-      );
+      await this.storage.clearCookie(response, PKCE_COOKIE_NAME, options);
     } catch {
       // Swallow: cleanup is opportunistic; callers get the original error.
     }
