@@ -2,6 +2,7 @@ import {
   AuthKitError,
   OAuthStateMismatchError,
   PKCECookieMissingError,
+  PKCEPayloadTooLargeError,
   SessionEncryptionError,
   TokenValidationError,
   TokenRefreshError,
@@ -47,6 +48,7 @@ describe('error subclasses', () => {
     ['TokenRefreshError', TokenRefreshError],
     ['OAuthStateMismatchError', OAuthStateMismatchError],
     ['PKCECookieMissingError', PKCECookieMissingError],
+    ['PKCEPayloadTooLargeError', PKCEPayloadTooLargeError],
   ];
 
   it.each(cases)(

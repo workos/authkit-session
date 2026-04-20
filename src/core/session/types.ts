@@ -206,7 +206,19 @@ export interface AuthUrlOptions {
   organizationId?: string;
   loginHint?: string;
   prompt?: 'login' | 'none' | 'consent' | 'select_account';
-  /** Custom state to pass through the OAuth flow. Returned in handleCallback. */
+  /**
+   * Custom state to pass through the OAuth flow. Returned in handleCallback.
+   *
+   * Bounded at 2048 UTF-8 bytes. The value is sealed alongside the PKCE
+   * verifier and stored in the `wos-auth-verifier` cookie; oversized values
+   * would push the cookie past the per-cookie browser limit (~4 KB) and
+   * would be silently dropped. Values over the supported limit throw
+   * `PKCEPayloadTooLargeError` at sign-in time.
+   *
+   * Note: total sealed payload size — not just `state` — drives the hard
+   * failure. Combining a large `returnPathname`, `redirectUri`, or
+   * `cookieDomain` with near-limit `state` can still overflow.
+   */
   state?: string;
 }
 

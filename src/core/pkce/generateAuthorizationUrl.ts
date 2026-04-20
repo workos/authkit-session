@@ -1,12 +1,31 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitConfig } from '../config/types.js';
+import { PKCEPayloadTooLargeError } from '../errors.js';
+import { serializeCookie } from '../session/serializeCookie.js';
 import type {
   CookieOptions,
   GetAuthorizationUrlOptions,
   SessionEncryption,
 } from '../session/types.js';
-import { getPKCECookieOptions } from './cookieOptions.js';
+import { getPKCECookieOptions, PKCE_COOKIE_NAME } from './cookieOptions.js';
 import { sealState } from './state.js';
+
+/**
+ * Maximum UTF-8 byte length for caller-supplied `options.state`. Enforced
+ * as an early, user-facing check so large custom state fails with a clear
+ * error before any crypto work — ahead of the authoritative sealed-cookie
+ * length guard below.
+ */
+export const PKCE_MAX_STATE_BYTES = 2048;
+
+/**
+ * Maximum serialized `Set-Cookie` header length (bytes) for the verifier.
+ * Browsers start dropping cookies past ~4096 bytes per RFC 6265; 3800
+ * leaves headroom for proxies that cap lower and for the handful of
+ * cookie attributes whose size isn't known until serialization time
+ * (notably `Domain=` when `cookieDomain` is set).
+ */
+export const PKCE_MAX_COOKIE_BYTES = 3800;
 
 /**
  * Internal authorization-URL generation result.
@@ -38,6 +57,19 @@ export async function generateAuthorizationUrl(params: {
   const { client, config, encryption, options } = params;
   const redirectUri = options.redirectUri ?? config.redirectUri;
 
+  // Early bound on caller-supplied `state` so oversized input fails with a
+  // clear error before any crypto work. The authoritative guard on the
+  // serialized cookie runs below — this one just avoids confusing users.
+  if (options.state !== undefined) {
+    const stateBytes = new TextEncoder().encode(options.state).byteLength;
+    if (stateBytes > PKCE_MAX_STATE_BYTES) {
+      throw new PKCEPayloadTooLargeError(
+        `Custom OAuth state is ${stateBytes} bytes, exceeds supported limit of ${PKCE_MAX_STATE_BYTES} bytes. ` +
+          `The sealed state is stored as the wos-auth-verifier cookie; oversized values would be silently dropped by the browser.`,
+      );
+    }
+  }
+
   const pkce = await client.pkce.generate();
   const nonce = crypto.randomUUID();
 
@@ -51,6 +83,24 @@ export async function generateAuthorizationUrl(params: {
     // which depends on the redirect URI's protocol.
     redirectUri: options.redirectUri,
   });
+
+  // Authoritative guard: measure the actual Set-Cookie header the adapter
+  // will emit. Catches cases the input-only check can't, like oversized
+  // returnPathname combined with near-max state, or an unusually long
+  // cookieDomain attribute.
+  const cookieOptions = getPKCECookieOptions(config, redirectUri);
+  const serialized = serializeCookie(
+    PKCE_COOKIE_NAME,
+    sealedState,
+    cookieOptions,
+  );
+  const cookieBytes = new TextEncoder().encode(serialized).byteLength;
+  if (cookieBytes > PKCE_MAX_COOKIE_BYTES) {
+    throw new PKCEPayloadTooLargeError(
+      `Sealed PKCE verifier cookie is ${cookieBytes} bytes, exceeds supported limit of ${PKCE_MAX_COOKIE_BYTES} bytes. ` +
+        `Reduce the size of options.state, options.returnPathname, or options.redirectUri.`,
+    );
+  }
 
   const url = client.userManagement.getAuthorizationUrl({
     provider: 'authkit',
@@ -68,6 +118,6 @@ export async function generateAuthorizationUrl(params: {
   return {
     url,
     sealedState,
-    cookieOptions: getPKCECookieOptions(config, redirectUri),
+    cookieOptions,
   };
 }

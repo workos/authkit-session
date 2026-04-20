@@ -1,4 +1,5 @@
 import type { AuthKitConfig } from '../config/types.js';
+import { serializeCookie } from './serializeCookie.js';
 import type { CookieOptions, HeadersBag, SessionStorage } from './types.js';
 
 export type { CookieOptions } from './types.js';
@@ -51,24 +52,9 @@ export abstract class CookieSessionStorage<
     name: string,
     value: string,
     options: CookieOptions,
-    { expired }: { expired?: boolean } = {},
+    flags: { expired?: boolean } = {},
   ): string {
-    const a = [`${name}=${encodeURIComponent(value)}`];
-    if (options.path) a.push(`Path=${options.path}`);
-    if (options.domain) a.push(`Domain=${options.domain}`);
-    if (options.maxAge != null || expired)
-      a.push(`Max-Age=${expired ? 0 : options.maxAge}`);
-    if (options.httpOnly) a.push('HttpOnly');
-    if (options.secure) a.push('Secure');
-    if (options.sameSite) {
-      const capitalizedSameSite =
-        options.sameSite.charAt(0).toUpperCase() +
-        options.sameSite.slice(1).toLowerCase();
-      a.push(`SameSite=${capitalizedSameSite}`);
-    }
-    if (options.priority) a.push(`Priority=${options.priority}`);
-    if (options.partitioned) a.push('Partitioned');
-    return a.join('; ');
+    return serializeCookie(name, value, options, flags);
   }
 
   /**

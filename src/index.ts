@@ -65,6 +65,7 @@ export {
   AuthKitError,
   OAuthStateMismatchError,
   PKCECookieMissingError,
+  PKCEPayloadTooLargeError,
   SessionEncryptionError,
   TokenValidationError,
   TokenRefreshError,

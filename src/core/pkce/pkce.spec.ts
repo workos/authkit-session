@@ -1,7 +1,15 @@
 import { AuthKitCore } from '../AuthKitCore.js';
 import sessionEncryption from '../encryption/ironWebcryptoEncryption.js';
-import { OAuthStateMismatchError, PKCECookieMissingError } from '../errors.js';
-import { generateAuthorizationUrl } from './generateAuthorizationUrl.js';
+import {
+  OAuthStateMismatchError,
+  PKCECookieMissingError,
+  PKCEPayloadTooLargeError,
+} from '../errors.js';
+import {
+  generateAuthorizationUrl,
+  PKCE_MAX_COOKIE_BYTES,
+  PKCE_MAX_STATE_BYTES,
+} from './generateAuthorizationUrl.js';
 
 const config = {
   clientId: 'test-client-id',
@@ -93,5 +101,66 @@ describe('PKCE end-to-end round-trip', () => {
         cookieValue: b.sealedState,
       }),
     ).rejects.toThrow(OAuthStateMismatchError);
+  });
+});
+
+describe('PKCE payload size guards', () => {
+  it(`accepts custom state at the ${PKCE_MAX_STATE_BYTES}-byte supported limit`, async () => {
+    const state = 'a'.repeat(PKCE_MAX_STATE_BYTES);
+    await expect(generate({ state })).resolves.toMatchObject({
+      sealedState: expect.any(String),
+    });
+  });
+
+  it(`rejects custom state ${PKCE_MAX_STATE_BYTES + 1} bytes or larger before sealing`, async () => {
+    const state = 'a'.repeat(PKCE_MAX_STATE_BYTES + 1);
+    await expect(generate({ state })).rejects.toThrow(PKCEPayloadTooLargeError);
+  });
+
+  it('counts state size in UTF-8 bytes, not JS characters (multibyte input)', async () => {
+    // 2-byte UTF-8 char; 1025 chars = 2050 bytes > 2048.
+    const state = '\u00e9'.repeat(1025);
+    await expect(generate({ state })).rejects.toThrow(PKCEPayloadTooLargeError);
+  });
+
+  it('rejects oversized serialized cookie from large returnPathname + near-limit state', async () => {
+    // Under the per-field state cap, but the sealed cookie still overflows
+    // once returnPathname is concatenated into the payload.
+    const state = 'a'.repeat(PKCE_MAX_STATE_BYTES);
+    const returnPathname = '/' + 'p'.repeat(2048);
+    await expect(generate({ state, returnPathname })).rejects.toThrow(
+      PKCEPayloadTooLargeError,
+    );
+  });
+
+  it('shrinks the effective budget when cookieDomain adds attribute bytes', async () => {
+    // cookieDomain=<long> is serialized into every Set-Cookie and counts
+    // against the browser's per-cookie budget. A state payload that fits
+    // without a Domain attribute can push the serialized header over the
+    // limit when Domain is present.
+    const longDomain = 'sub.' + 'd'.repeat(200) + '.example.com';
+    const configWithDomain = { ...config, cookieDomain: longDomain } as any;
+
+    const state = 'a'.repeat(PKCE_MAX_STATE_BYTES);
+    await expect(
+      generateAuthorizationUrl({
+        client: mockClient as any,
+        config: configWithDomain,
+        encryption: sessionEncryption,
+        options: { state, returnPathname: '/' + 'p'.repeat(700) },
+      }),
+    ).rejects.toThrow(PKCEPayloadTooLargeError);
+  });
+
+  it(`error message names PKCE_MAX_COOKIE_BYTES (${PKCE_MAX_COOKIE_BYTES})`, async () => {
+    const state = 'a'.repeat(PKCE_MAX_STATE_BYTES);
+    const returnPathname = '/' + 'p'.repeat(2048);
+    try {
+      await generate({ state, returnPathname });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PKCEPayloadTooLargeError);
+      expect((err as Error).message).toContain(String(PKCE_MAX_COOKIE_BYTES));
+    }
   });
 });

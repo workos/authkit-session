@@ -37,6 +37,13 @@ export class PKCECookieMissingError extends AuthKitError {
   }
 }
 
+export class PKCEPayloadTooLargeError extends AuthKitError {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = 'PKCEPayloadTooLargeError';
+  }
+}
+
 export class TokenRefreshError extends AuthKitError {
   readonly userId?: string;
   readonly sessionId?: string;

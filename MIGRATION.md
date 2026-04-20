@@ -181,6 +181,21 @@ return Response.redirect(new URL(returnPathname, origin));
 Custom state still round-trips: pass `state: '...'` to `createSignIn` and
 receive it unchanged as the returned `state` field from `handleCallback`.
 
+**Supported size for `state`**: 2048 UTF-8 bytes. The value is sealed into
+the `wos-auth-verifier` cookie alongside the PKCE verifier, and the
+per-cookie browser limit (~4 KB) constrains the total sealed payload.
+Values over the supported limit throw `PKCEPayloadTooLargeError` at
+sign-in time rather than silently breaking the next callback with a
+dropped cookie. Note: `returnPathname`, `redirectUri`, and `cookieDomain`
+all share this budget, so a near-limit `state` combined with a long
+`returnPathname` can still overflow — the hard failure is on the total
+serialized cookie size, not just `state`.
+
+This is a regression from the pre-0.4.0 flow, where `state` lived only in
+the URL and could be much larger. Callers carrying more than a couple of
+kilobytes of opaque state should move it to server-side storage keyed by
+a short ID, and pass only the ID through `state`.
+
 ---
 
 ### 6. New typed errors
@@ -191,6 +206,11 @@ receive it unchanged as the returned `state` field from `handleCallback`.
   verifier cookie byte-for-byte.
 - `PKCECookieMissingError` — cookie not present on the request. Typically:
   proxy stripped it, `Set-Cookie` didn't propagate, or browser blocked it.
+
+`createAuthorization` / `createSignIn` / `createSignUp` can throw:
+
+- `PKCEPayloadTooLargeError` — `options.state` exceeds 2048 UTF-8 bytes,
+  or the total sealed cookie exceeds the per-cookie browser limit.
 
 Both subclass `AuthKitError` and are exported from the package root:
 
