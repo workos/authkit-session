@@ -173,6 +173,11 @@ export interface GetAuthorizationUrlResult {
   url: string;
 }
 
+export type CreateAuthorizationResult<TResponse> = GetAuthorizationUrlResult & {
+  response?: TResponse;
+  headers?: HeadersBag;
+};
+
 export interface CookieOptions {
   path?: string;
   domain?: string;

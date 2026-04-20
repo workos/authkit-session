@@ -39,7 +39,6 @@ export function getPKCECookieOptions(
   config: AuthKitConfig,
   redirectUri?: string,
 ): CookieOptions {
-  // 'strict' is downgraded to 'lax' (see JSDoc); anything else falls through to 'lax'.
   const configuredSameSite = (config.cookieSameSite ?? 'lax').toLowerCase();
   const sameSite: 'lax' | 'none' =
     configuredSameSite === 'none' ? 'none' : 'lax';

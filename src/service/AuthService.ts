@@ -8,9 +8,9 @@ import {
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
+  CreateAuthorizationResult,
   CustomClaims,
   GetAuthorizationUrlOptions,
-  GetAuthorizationUrlResult,
   HeadersBag,
   Session,
   SessionEncryption,
@@ -228,9 +228,7 @@ export class AuthService<TRequest, TResponse> {
   async createAuthorization(
     response: TResponse | undefined,
     options: GetAuthorizationUrlOptions = {},
-  ): Promise<
-    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
-  > {
+  ): Promise<CreateAuthorizationResult<TResponse>> {
     const { url, sealedState, cookieOptions } =
       await this.operations.createAuthorization(options);
     const write = await this.storage.setCookie(
@@ -248,9 +246,7 @@ export class AuthService<TRequest, TResponse> {
   async createSignIn(
     response: TResponse | undefined,
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<
-    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
-  > {
+  ): Promise<CreateAuthorizationResult<TResponse>> {
     return this.createAuthorization(response, {
       ...options,
       screenHint: 'sign-in',
@@ -263,9 +259,7 @@ export class AuthService<TRequest, TResponse> {
   async createSignUp(
     response: TResponse | undefined,
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<
-    GetAuthorizationUrlResult & { response?: TResponse; headers?: HeadersBag }
-  > {
+  ): Promise<CreateAuthorizationResult<TResponse>> {
     return this.createAuthorization(response, {
       ...options,
       screenHint: 'sign-up',
