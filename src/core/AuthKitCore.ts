@@ -1,7 +1,6 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
-import { once } from '../utils.js';
+import { constantTimeEqual, once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
 import {
   OAuthStateMismatchError,
@@ -185,12 +184,10 @@ export class AuthKitCore {
         'PKCE verifier cookie missing — cannot verify OAuth state. Ensure Set-Cookie headers are propagated on redirects.',
       );
     }
-    const urlBytes = Buffer.from(stateFromUrl, 'utf8');
-    const cookieBytes = Buffer.from(cookieValue, 'utf8');
-    if (
-      urlBytes.length !== cookieBytes.length ||
-      !timingSafeEqual(urlBytes, cookieBytes)
-    ) {
+    const encoder = new TextEncoder();
+    const urlBytes = encoder.encode(stateFromUrl);
+    const cookieBytes = encoder.encode(cookieValue);
+    if (!constantTimeEqual(urlBytes, cookieBytes)) {
       throw new OAuthStateMismatchError('OAuth state mismatch');
     }
 
