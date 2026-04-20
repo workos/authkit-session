@@ -416,9 +416,8 @@ describe('AuthService', () => {
     });
 
     it('merges lowercase set-cookie headers into an array (case-insensitive)', async () => {
-      // Adapters that normalize through Headers objects emit lowercase keys.
-      // Without case-insensitive merging, the second bag overwrites the first
-      // and one of the two cookies (session or verifier-delete) is lost.
+      // Regression: adapters that normalize through Headers objects emit
+      // lowercase `set-cookie`.
       const realStorage = makeStorage();
       const lowerStorage = {
         ...realStorage,
@@ -467,11 +466,7 @@ describe('AuthService', () => {
         state: sealedState,
       });
 
-      const bag = result.headers ?? {};
-      const setCookieKey = Object.keys(bag).find(
-        k => k.toLowerCase() === 'set-cookie',
-      )!;
-      const setCookie = bag[setCookieKey];
+      const setCookie = result.headers?.['set-cookie'];
       expect(Array.isArray(setCookie)).toBe(true);
       expect(setCookie).toHaveLength(2);
       expect(

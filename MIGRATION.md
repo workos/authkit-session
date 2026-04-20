@@ -2,45 +2,47 @@
 
 ## 0.3.x → 0.4.0
 
-0.4.0 introduces PKCE + a CSRF-bound verifier cookie, AND collapses the verifier-cookie plumbing into `SessionStorage`. The OAuth `state` parameter is now a sealed blob that is byte-matched against an `HttpOnly` `wos-auth-verifier` cookie before the code is exchanged. Callers no longer need to read, write, or delete this cookie themselves — the storage layer owns it.
+0.4.0 introduces OAuth state binding via a PKCE verifier cookie and collapses
+verifier-cookie plumbing into `SessionStorage`. The `state` query parameter is
+now an opaque sealed blob that is byte-matched against an `HttpOnly`
+`wos-auth-verifier` cookie before the authorization code is exchanged.
 
-This is a breaking change for both adapter authors and direct `AuthService` consumers.
+This is a breaking change for adapter authors and for direct `AuthService`
+consumers. Most callers upgrading an existing framework adapter (e.g.
+`authkit-tanstack-react-start`, `authkit-sveltekit`) only need to bump the
+adapter version.
 
 ---
 
 ### TL;DR
 
-| Before                                                         | After                                                                    |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `getSignInUrl()` returns `{ url, sealedState, cookieOptions }` | `createSignIn(response, options)` returns `{ url, response?, headers? }` |
-| `handleCallback({ code, state, cookieValue })`                 | `handleCallback(request, response, { code, state })`                     |
-| `auth.buildPKCEDeleteCookieHeader()`                           | `auth.clearPendingVerifier(response, { redirectUri? })`                  |
-| Adapter serializes `Set-Cookie` for PKCE manually              | `storage.setCookie` / `storage.clearCookie` handle it                    |
-| `state` param = base64 JSON                                    | `state` param = opaque sealed blob                                       |
-| `decodeState(state)` for `returnPathname`                      | Removed — use `handleCallback`'s returned `returnPathname`               |
-| No extra cookie on the wire                                    | New `wos-auth-verifier` cookie, `HttpOnly`, `Max-Age=600`                |
+| Before (0.3.x)                                      | After (0.4.0)                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `getSignInUrl(options): Promise<string>`            | `createSignIn(response, options)` returns `{ url, response?, headers? }` |
+| `handleCallback(req, res, { code, state? })`        | Same signature; `state` is now a sealed blob and **required**            |
+| Adapter overrides `getSession(request)`             | Adapter implements `getCookie(request, name)`                            |
+| No verifier cookie on the wire                      | New `wos-auth-verifier` cookie, `HttpOnly`, `Max-Age=600`                |
+| `handleCallback` emits a single `Set-Cookie` string | Emits `string[]` — session cookie + verifier delete                      |
+| `state` = plaintext `{internal}.{userState}`        | `state` = opaque sealed blob (custom `state` still round-trips)          |
+| No error-path cleanup helper                        | New: `clearPendingVerifier(response, { redirectUri? })`                  |
 
 ---
 
-### 1. `createSignIn` / `createSignUp` / `createAuthorization` (renamed)
+### 1. URL builders renamed
 
-The three URL-builder methods are renamed and now write the verifier cookie through storage. They take a `response` argument so storage can mutate it (or emit headers) and return `{ url, response?, headers? }`.
+`getAuthorizationUrl` / `getSignInUrl` / `getSignUpUrl` are renamed to
+`createAuthorization` / `createSignIn` / `createSignUp`. Each now takes a
+`response` argument so storage can write the verifier cookie, and returns
+`{ url, response?, headers? }` instead of a bare string.
 
 **Before**
 
 ```ts
-import { serializePKCESetCookie } from '@workos/authkit-session';
-
-const { url, sealedState, cookieOptions } = await auth.getSignInUrl({
-  returnPathname: '/app',
-});
+const url = await auth.getSignInUrl({ returnPathname: '/app' });
 
 return new Response(null, {
   status: 302,
-  headers: {
-    Location: url,
-    'Set-Cookie': serializePKCESetCookie(cookieOptions, sealedState),
-  },
+  headers: { Location: url },
 });
 ```
 
@@ -68,94 +70,51 @@ Method renames:
 | `getSignInUrl(...)`        | `createSignIn(response, ...)`        |
 | `getSignUpUrl(...)`        | `createSignUp(response, ...)`        |
 
-If you're building on top of a framework adapter (`authkit-tanstack-react-start`, `authkit-sveltekit`, etc.), upgrade the adapter — it handles this for you.
-
 ---
 
-### 2. `handleCallback` (no more `cookieValue`)
+### 2. `handleCallback` — same signature, new contract
 
-`handleCallback` reads the verifier cookie through storage now — you don't pass it in.
+The public signature (`handleCallback(request, response, { code, state? })`)
+is unchanged, but behavior differs in two ways:
 
-**Before**
+**`state` is now required in practice.** The library reads the verifier cookie
+via `storage.getCookie` and byte-compares it against `state` before exchanging
+the code. If `state` is missing from the URL, `OAuthStateMismatchError` is
+thrown. If the cookie is missing, `PKCECookieMissingError` is thrown.
 
-```ts
-const cookieValue = readCookie(request, 'wos-auth-verifier');
-
-const result = await auth.handleCallback(request, response, {
-  code: url.searchParams.get('code')!,
-  state: url.searchParams.get('state') ?? undefined,
-  cookieValue,
-});
-```
-
-**After**
+**Success returns `headers['Set-Cookie']` as a `string[]`** — one entry for
+the session cookie, one entry clearing the verifier. Adapters **must append
+each value as its own `Set-Cookie` header** (never `.join(', ')`, never
+`headers.set(...)` with an array — a comma-joined `Set-Cookie` is not a
+valid single HTTP header, and the browser will reject all but one cookie).
 
 ```ts
 const result = await auth.handleCallback(request, response, {
   code: url.searchParams.get('code')!,
   state: url.searchParams.get('state') ?? undefined,
 });
-```
 
-**Adapter requirement**: your `SessionStorage` implementation must now implement `getCookie(request, name): Promise<string | null>`. The existing session `getSession` override is unnecessary — the base class provides it as a one-line wrapper over `getCookie`.
-
-On success, `handleCallback` returns `headers['Set-Cookie']` as a `string[]` — one entry for the session cookie, one entry clearing the verifier. Adapters **must append each value as its own `Set-Cookie` header** (never `.join(', ')`) — otherwise the browser only sees one of the two cookies.
-
-```ts
-if (Array.isArray(result.headers?.['Set-Cookie'])) {
-  for (const value of result.headers['Set-Cookie']) {
-    response.headers.append('Set-Cookie', value);
+const setCookie = result.headers?.['Set-Cookie'];
+if (setCookie) {
+  for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
+    response.headers.append('Set-Cookie', v);
   }
 }
 ```
 
 ---
 
-### 3. `auth.buildPKCEDeleteCookieHeader` → `auth.clearPendingVerifier`
+### 3. `SessionStorage` adds `getCookie` / `setCookie` / `clearCookie`
 
-On error paths where `handleCallback` never runs (OAuth error responses, missing `code`, early bail-outs), clear the verifier through storage:
+The `SessionStorage` interface now has cookie-level primitives the library
+uses to own the verifier cookie lifecycle. If you extend `CookieSessionStorage`:
 
-**Before**
-
-```ts
-response.headers.append('Set-Cookie', auth.buildPKCEDeleteCookieHeader());
-```
-
-**After**
-
-```ts
-const { headers } = await auth.clearPendingVerifier(response);
-// Apply headers as usual
-```
-
-If the original `createSignIn` call used a per-call `redirectUri` override, pass the same value so the emitted `Path=` matches the cookie's original scope:
-
-```ts
-await auth.clearPendingVerifier(response, {
-  redirectUri: 'https://app.example.com/custom/callback',
-});
-```
-
-(If the callback actually succeeds, the verifier is cleared automatically by `handleCallback` — the path is recovered from the sealed state so per-call overrides don't leak an orphan cookie.)
-
----
-
-### 4. Removed public exports
-
-The following are no longer exported. Most are internal now; the rest are replaced by the `clearPendingVerifier` / `SessionStorage.setCookie` pair.
-
-- `PKCE_COOKIE_NAME` — internal constant.
-- `getPKCECookieOptions(config, redirectUri?)` — internal helper.
-- `serializePKCESetCookie(options, value, { expired? })` — replaced by `SessionStorage.setCookie` / `clearCookie`.
-- `PKCECookieOptions` — folded into `CookieOptions`.
-- `AuthService.buildPKCEDeleteCookieHeader` — replaced by `clearPendingVerifier`.
-- `AuthService.getPKCECookieOptions` — no public replacement (internal only).
-
----
-
-### 5. `SessionStorage` adds `getCookie` / `setCookie` / `clearCookie`
-
-If you wrote a custom `SessionStorage` (subclass of `CookieSessionStorage` or bare implementation), you need to add `getCookie`. The `CookieSessionStorage` base class provides concrete `setCookie` / `clearCookie` using `applyHeaders`, so subclasses only need to implement the request-side read.
+- **Implement `getCookie(request, name)`.** The base class now provides
+  `getSession(request)` as a one-line wrapper over `getCookie(request,
+this.cookieName)`.
+- **Delete your `getSession` override.**
+- **`setCookie` / `clearCookie` are provided by the base class** via
+  `applyHeaders`. No action needed.
 
 **Before**
 
@@ -177,33 +136,70 @@ class MyStorage extends CookieSessionStorage<Request, Response> {
 }
 ```
 
-`getSession` is now a one-line wrapper in the base class that calls `getCookie(request, this.cookieName)` — delete your override.
+If you wrote a bare `SessionStorage` (no `CookieSessionStorage` base), you
+must also implement `setCookie` and `clearCookie`. See `src/core/session/types.ts`.
 
 ---
 
-### 6. `decodeState` is removed
+### 4. New: error-path verifier cleanup
 
-If you called `decodeState` to read `returnPathname` outside of `handleCallback`, stop. The state blob is encrypted.
+On paths where sign-in was initiated but `handleCallback` never runs (OAuth
+error responses, missing `code`, early bail-outs), the verifier cookie would
+linger until `Max-Age` expires. Call `clearPendingVerifier` to emit a delete:
 
-Use the `returnPathname` returned by `handleCallback`:
+```ts
+const { headers } = await auth.clearPendingVerifier(response);
+// Apply headers the same way you apply any storage output
+```
+
+For headers-only adapters, pass `undefined`:
+
+```ts
+const { headers } = await auth.clearPendingVerifier(undefined);
+```
+
+If the original `createSignIn` call used a per-call `redirectUri` override,
+pass the same value so the emitted `Path=` matches the cookie's original scope:
+
+```ts
+await auth.clearPendingVerifier(response, {
+  redirectUri: 'https://app.example.com/custom/callback',
+});
+```
+
+(On callback success, the verifier is cleared automatically — the path is
+recovered from the sealed state so per-call overrides don't leak an orphan
+cookie.)
+
+---
+
+### 5. `state` is now opaque
+
+The `state` URL parameter changed from plaintext `{internal}.{userState}` to
+an opaque sealed blob. If you decoded `state` yourself (e.g. to read
+`returnPathname` outside of `handleCallback`), stop — use the values returned
+from `handleCallback`:
 
 ```ts
 const { returnPathname, state: customState } = await auth.handleCallback(...);
 return Response.redirect(new URL(returnPathname, origin));
 ```
 
-If you were passing your own data through `state`, keep using the `state` option on `createSignIn({ state: '...' })` — it round-trips through `handleCallback`'s returned `state` field unchanged.
+Custom state still round-trips: pass `state: '...'` to `createSignIn` and
+receive it unchanged as the returned `state` field from `handleCallback`.
 
 ---
 
-### 7. New typed errors
+### 6. New typed errors
 
 `handleCallback` can throw these in addition to `SessionEncryptionError`:
 
-- `OAuthStateMismatchError` — state missing from URL, or doesn't match the cookie byte-for-byte.
-- `PKCECookieMissingError` — cookie wasn't sent. Typically: proxy stripped it, `Set-Cookie` didn't propagate, or user's browser blocked it.
+- `OAuthStateMismatchError` — `state` missing from URL, or doesn't match the
+  verifier cookie byte-for-byte.
+- `PKCECookieMissingError` — cookie not present on the request. Typically:
+  proxy stripped it, `Set-Cookie` didn't propagate, or browser blocked it.
 
-Both are subclasses of `AuthKitError` and are exported from the root.
+Both subclass `AuthKitError` and are exported from the package root:
 
 ```ts
 import {
@@ -227,27 +223,50 @@ try {
 
 ---
 
-### 8. Verifier cookie on the wire
+### 7. Verifier cookie on the wire
 
 A `wos-auth-verifier` cookie is set during sign-in and read during callback.
 
 - **Name**: `wos-auth-verifier`
 - **HttpOnly**, **Secure** (unless explicitly `SameSite=None` without HTTPS)
-- **SameSite**: `Lax` (downgraded from `Strict` so it survives the cross-site return from WorkOS). `None` preserved for iframe/embed flows.
+- **SameSite**: `Lax` (survives the cross-site return from WorkOS). `None`
+  preserved for iframe/embed flows.
 - **Max-Age**: `600` (10 minutes)
-- **Path**: scoped to the redirect URI's pathname (prevents collisions between multiple AuthKit apps on the same host).
+- **Path**: scoped to the redirect URI's pathname (prevents collisions
+  between multiple AuthKit apps on the same host)
 
 **Checklist**
 
 - [ ] Edge/CDN/firewall allowlists pass the cookie through.
 - [ ] Cookie-stripping proxies don't strip `wos-auth-verifier`.
-- [ ] Multiple AuthKit apps on the same host have distinct redirect URI paths (or `cookieDomain`s).
-- [ ] CSP or cookie-policy banners don't interfere with setting an `HttpOnly` functional cookie during OAuth.
+- [ ] Multiple AuthKit apps on the same host have distinct redirect URI paths
+      (or `cookieDomain`s).
+- [ ] CSP or cookie-policy banners don't interfere with setting an `HttpOnly`
+      functional cookie during OAuth.
+
+---
+
+### 8. Header-bag casing
+
+`HeadersBag` is `Record<string, string | string[]>`. The library merges
+`Set-Cookie` entries case-insensitively and preserves the first bag's key
+casing — so an adapter that normalizes through `Headers` objects and emits
+lowercase `set-cookie` will still get the two-cookie array on callback. If
+you read `result.headers?.['Set-Cookie']` in middleware that processes
+adapter-produced bags, match whichever casing your adapter emits (the bundled
+`CookieSessionStorage` emits capital-S `Set-Cookie`).
 
 ---
 
 ### Why
 
-The plaintext `state` → `returnPathname` design was a CSRF gap: an attacker could craft a callback link with a known `code` and any `state`, and the victim's browser would complete the exchange. Binding `state` to an `HttpOnly` cookie set on the same browser at sign-in time closes that gap — the attacker has no way to forge the cookie.
+The plaintext `state` → `returnPathname` design was a CSRF gap: an attacker
+could craft a callback link with a known `code` and any `state`, and the
+victim's browser would complete the exchange. Binding `state` to an
+`HttpOnly` cookie set on the same browser at sign-in time closes that gap —
+the attacker has no way to forge the cookie.
 
-The collapsed API — storage owns all cookies, no PKCE-specific public exports — matches the precedent set by Arctic, openid-client, and every other modern auth library. Callers don't see sealed blobs or cookie options; they see URLs and response mutations.
+The collapsed API — storage owns all cookies, no PKCE-specific public
+exports — matches the precedent set by Arctic, openid-client, and every other
+modern auth library. Callers don't see sealed blobs or cookie options; they
+see URLs and response mutations.

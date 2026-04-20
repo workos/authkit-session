@@ -49,19 +49,20 @@ configure({
 ### 2. Create Storage Adapter
 
 ```typescript
-import {
-  CookieSessionStorage,
-  parseCookieHeader,
-} from '@workos/authkit-session';
+import { CookieSessionStorage } from '@workos/authkit-session';
 
 export class MyFrameworkStorage extends CookieSessionStorage<
   Request,
   Response
 > {
   async getCookie(request: Request, name: string): Promise<string | null> {
-    const cookieHeader = request.headers.get('cookie');
-    if (!cookieHeader) return null;
-    return parseCookieHeader(cookieHeader)[name] ?? null;
+    const header = request.headers.get('cookie');
+    if (!header) return null;
+    for (const part of header.split(';')) {
+      const [k, ...rest] = part.trim().split('=');
+      if (k === name) return decodeURIComponent(rest.join('='));
+    }
+    return null;
   }
 
   // Optional: override if your framework can mutate responses
@@ -121,13 +122,18 @@ export const authMiddleware = () => {
         undefined,
         refreshedSessionData,
       );
-      if (headers?.['Set-Cookie']) {
+      const setCookie = headers?.['Set-Cookie'];
+      if (setCookie) {
         const newResponse = new Response(result.response.body, {
           status: result.response.status,
           statusText: result.response.statusText,
           headers: result.response.headers,
         });
-        newResponse.headers.set('Set-Cookie', headers['Set-Cookie']);
+        // Append each entry — never `.set()` with an array (comma-joined
+        // Set-Cookie is not a valid single HTTP header).
+        for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
+          newResponse.headers.append('Set-Cookie', v);
+        }
         return { ...result, response: newResponse };
       }
     }
@@ -194,6 +200,7 @@ authService.createSignIn(response, options)
 authService.createSignUp(response, options)
 
 // Error-path cleanup for the PKCE verifier cookie
+// (response may be `undefined` for headers-only adapters)
 authService.clearPendingVerifier(response, { redirectUri? })
 ```
 
