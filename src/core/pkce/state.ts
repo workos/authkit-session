@@ -103,7 +103,14 @@ export async function unsealState(
 
   const ageMs = Date.now() - result.output.issuedAt;
   if (ageMs < -PKCE_CLOCK_SKEW_MS || ageMs > PKCE_COOKIE_MAX_AGE * 1000) {
-    throw new SessionEncryptionError('PKCE state expired');
+    // Attach age context so production logs can diagnose clock-skew issues
+    // via the `cause` chain without leaking the sealed blob itself.
+    throw new SessionEncryptionError(
+      'PKCE state expired',
+      new Error(
+        `age=${ageMs}ms, maxAge=${PKCE_COOKIE_MAX_AGE * 1000}ms, skew=±${PKCE_CLOCK_SKEW_MS}ms`,
+      ),
+    );
   }
 
   return result.output;

@@ -29,7 +29,7 @@ function mergeHeaderBags(
   if (!a) return b;
   if (!b) return a;
   const merged: HeadersBag = { ...a };
-  const existingSetCookieKey = Object.keys(merged).find(
+  let setCookieKey = Object.keys(merged).find(
     k => k.toLowerCase() === 'set-cookie',
   );
   for (const [key, value] of Object.entries(b)) {
@@ -37,14 +37,15 @@ function mergeHeaderBags(
       merged[key] = value;
       continue;
     }
-    if (!existingSetCookieKey) {
+    if (!setCookieKey) {
       merged[key] = value;
+      setCookieKey = key;
       continue;
     }
-    const left = merged[existingSetCookieKey]!;
+    const left = merged[setCookieKey]!;
     const leftArr = Array.isArray(left) ? left : [left];
     const rightArr = Array.isArray(value) ? value : [value];
-    merged[existingSetCookieKey] = [...leftArr, ...rightArr];
+    merged[setCookieKey] = [...leftArr, ...rightArr];
   }
   return merged;
 }
