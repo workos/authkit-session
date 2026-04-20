@@ -106,11 +106,14 @@ describe('getPKCECookieOptions', () => {
       ['nested callback path', 'https://app.example.com/auth/v2/callback'],
       ['host-only', 'https://app.example.com'],
       ['invalid url', 'not-a-valid-url'],
-    ])("is always '/' regardless of redirectUri (%s)", (_label, redirectUri) => {
-      const opts = getPKCECookieOptions({ ...baseConfig, redirectUri });
+    ])(
+      "is always '/' regardless of redirectUri (%s)",
+      (_label, redirectUri) => {
+        const opts = getPKCECookieOptions({ ...baseConfig, redirectUri });
 
-      expect(opts.path).toBe('/');
-    });
+        expect(opts.path).toBe('/');
+      },
+    );
 
     it("is '/' even when per-call redirectUri override is supplied", () => {
       const opts = getPKCECookieOptions(

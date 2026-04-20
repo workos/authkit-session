@@ -279,7 +279,7 @@ describe('AuthService', () => {
   });
 
   describe('clearPendingVerifier()', () => {
-    it("emits a delete cookie with Path=/", async () => {
+    it('emits a delete cookie with Path=/', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
