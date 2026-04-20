@@ -576,11 +576,11 @@ describe('AuthService', () => {
     });
 
     it('emits a scheme-agnostic (secure=false, sameSite=lax) delete on pre-unseal failure', async () => {
-      // Covers the edge case where a sign-in used an http:// redirectUri
-      // override (secure=false) but then the callback hits a pre-unseal
-      // error (state mismatch, tampered seal). We don't know the override
-      // at that point, so the fallback delete must drop Secure so the
-      // browser accepts the Set-Cookie over http://.
+      // Covers the end-to-end case that motivates the schemeAgnostic flag:
+      // sign-in used an http:// redirectUri override (secure=false), then
+      // the callback hits a pre-unseal error (state mismatch) — we don't
+      // know the override at that point, so the fallback delete must drop
+      // Secure so the browser accepts the Set-Cookie over http://.
       const realStorage = makeStorage();
       const realService = new AuthService(
         { ...mockConfig, cookieSameSite: 'lax' } as any,
@@ -589,7 +589,14 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
+      await realService.createAuthorization('res', {
+        redirectUri: 'http://localhost:3000/callback',
+      });
+      // Confirm the original set was secure=false (the scenario we're
+      // proving we can still clean up).
+      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.secure).toBe(
+        false,
+      );
       const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
       realStorage.cookies.set(
         'wos-auth-verifier',
