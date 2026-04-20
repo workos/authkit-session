@@ -264,13 +264,13 @@ For maximum control, use the primitives directly:
 import {
   AuthKitCore,
   AuthOperations,
-  getConfig,
+  getConfigurationProvider,
   getWorkOS,
   sessionEncryption,
 } from '@workos/authkit-session';
 
-const config = getConfig();
-const client = getWorkOS(config);
+const config = getConfigurationProvider().getConfig();
+const client = getWorkOS();
 const core = new AuthKitCore(config, client, sessionEncryption);
 const operations = new AuthOperations(core, client, config, sessionEncryption);
 
