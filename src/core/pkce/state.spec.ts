@@ -74,40 +74,16 @@ describe('PKCE state seal/unseal', () => {
     }
   });
 
-  it('preserves customState with dots exactly', async () => {
-    const withDots: PKCEStateInput = {
-      nonce: 'n',
-      codeVerifier: 'v',
-      customState: 'has.many.dots.in.it',
-    };
-    const sealed = await sealState(sessionEncryption, testPassword, withDots);
+  it.each<[string, string]>([
+    ['dots', 'has.many.dots.in.it'],
+    ['JSON-like', '{"key":"value","nested":{"a":1}}'],
+    ['2KB payload', 'x'.repeat(2048)],
+  ])('preserves %s customState byte-identically', async (_label, customState) => {
+    const input: PKCEStateInput = { nonce: 'n', codeVerifier: 'v', customState };
+    const sealed = await sealState(sessionEncryption, testPassword, input);
     const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
 
-    expect(unsealed.customState).toBe('has.many.dots.in.it');
-  });
-
-  it('preserves JSON-like customState', async () => {
-    const jsonLike: PKCEStateInput = {
-      nonce: 'n',
-      codeVerifier: 'v',
-      customState: '{"key":"value","nested":{"a":1}}',
-    };
-    const sealed = await sealState(sessionEncryption, testPassword, jsonLike);
-    const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
-
-    expect(unsealed.customState).toBe(jsonLike.customState);
-  });
-
-  it('preserves 2KB customState', async () => {
-    const large: PKCEStateInput = {
-      nonce: 'n',
-      codeVerifier: 'v',
-      customState: 'x'.repeat(2048),
-    };
-    const sealed = await sealState(sessionEncryption, testPassword, large);
-    const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
-
-    expect(unsealed.customState).toBe('x'.repeat(2048));
+    expect(unsealed.customState).toBe(customState);
   });
 
   it('throws SessionEncryptionError on tampered ciphertext', async () => {
