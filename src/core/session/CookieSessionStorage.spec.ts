@@ -19,7 +19,7 @@ const createMockConfig = (
 
 // Concrete implementation for testing the abstract class
 class TestCookieSessionStorage extends CookieSessionStorage<string, string> {
-  async getSession(): Promise<string | null> {
+  async getCookie(_request: string, _name: string): Promise<string | null> {
     return null;
   }
 }
@@ -110,7 +110,7 @@ describe('CookieSessionStorage', () => {
     it('concrete implementation works', async () => {
       const storage = new TestCookieSessionStorage(createMockConfig());
 
-      const session = await storage.getSession();
+      const session = await storage.getSession('request');
       expect(session).toBeNull();
 
       const savedResult = await storage.saveSession(undefined, 'session-data');
@@ -123,7 +123,7 @@ describe('CookieSessionStorage', () => {
     });
   });
 
-  describe('buildSetCookie', () => {
+  describe('serializeCookie', () => {
     it('capitalizes SameSite values for Safari compatibility', async () => {
       const testCases = [
         { input: 'lax' as const, expected: 'SameSite=Lax' },
@@ -137,6 +137,82 @@ describe('CookieSessionStorage', () => {
         const result = await storage.saveSession(undefined, 'test-data');
         expect(result.headers?.['Set-Cookie']).toContain(expected);
       }
+    });
+  });
+
+  describe('generic cookie primitives', () => {
+    it('setCookie emits a Set-Cookie with the passed name, value, and options', async () => {
+      const storage = new TestCookieSessionStorage(createMockConfig());
+
+      const result = await storage.setCookie(undefined, 'foo', 'bar', {
+        path: '/x',
+        maxAge: 60,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+      });
+
+      const header = result.headers?.['Set-Cookie'];
+      expect(header).toContain('foo=bar');
+      expect(header).toContain('Path=/x');
+      expect(header).toContain('Max-Age=60');
+      expect(header).toContain('HttpOnly');
+      expect(header).toContain('Secure');
+      expect(header).toContain('SameSite=Lax');
+    });
+
+    it('clearCookie emits Max-Age=0 with empty value', async () => {
+      const storage = new TestCookieSessionStorage(createMockConfig());
+
+      const result = await storage.clearCookie(undefined, 'foo', {
+        path: '/x',
+      });
+
+      const header = result.headers?.['Set-Cookie'] as string;
+      expect(header).toContain('foo=;');
+      expect(header).toContain('Max-Age=0');
+    });
+
+    it('getCookie is abstract — subclass must implement it', async () => {
+      const storage = new TestCookieSessionStorage(createMockConfig());
+
+      const value = await storage.getCookie('request', 'anything');
+      expect(value).toBeNull();
+    });
+
+    it('getSession wraps getCookie with the configured cookie name', async () => {
+      class CapturingStorage extends CookieSessionStorage<string, string> {
+        captured?: { name: string };
+        async getCookie(_req: string, name: string): Promise<string | null> {
+          this.captured = { name };
+          return 'stored-value';
+        }
+      }
+      const storage = new CapturingStorage(
+        createMockConfig({ cookieName: 'my-session' }),
+      );
+
+      const value = await storage.getSession('request');
+
+      expect(storage.captured).toEqual({ name: 'my-session' });
+      expect(value).toBe('stored-value');
+    });
+
+    it('saveSession and setCookie produce identical headers for the session cookie', async () => {
+      const config = createMockConfig();
+      const storage = new TestCookieSessionStorage(config);
+
+      const saved = await storage.saveSession(undefined, 'data');
+      const explicit = await storage.setCookie(
+        undefined,
+        storage['cookieName'],
+        'data',
+        storage['cookieOptions'],
+      );
+
+      expect(saved.headers?.['Set-Cookie']).toBe(
+        explicit.headers?.['Set-Cookie'],
+      );
     });
   });
 });

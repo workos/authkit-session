@@ -49,25 +49,26 @@ configure({
 ### 2. Create Storage Adapter
 
 ```typescript
-import {
-  CookieSessionStorage,
-  parseCookieHeader,
-} from '@workos/authkit-session';
+import { CookieSessionStorage } from '@workos/authkit-session';
 
 export class MyFrameworkStorage extends CookieSessionStorage<
   Request,
   Response
 > {
-  async getSession(request: Request): Promise<string | null> {
-    const cookieHeader = request.headers.get('cookie');
-    if (!cookieHeader) return null;
-    return parseCookieHeader(cookieHeader)[this.cookieName] ?? null;
+  async getCookie(request: Request, name: string): Promise<string | null> {
+    const header = request.headers.get('cookie');
+    if (!header) return null;
+    for (const part of header.split(';')) {
+      const [k, ...rest] = part.trim().split('=');
+      if (k === name) return decodeURIComponent(rest.join('='));
+    }
+    return null;
   }
 
   // Optional: override if your framework can mutate responses
   protected async applyHeaders(
     response: Response | undefined,
-    headers: Record<string, string>,
+    headers: Record<string, string | string[]>,
   ): Promise<{ response: Response }> {
     const newResponse = response
       ? new Response(response.body, {
@@ -77,16 +78,20 @@ export class MyFrameworkStorage extends CookieSessionStorage<
         })
       : new Response();
 
-    Object.entries(headers).forEach(([key, value]) => {
-      newResponse.headers.append(key, value);
-    });
+    for (const [key, value] of Object.entries(headers)) {
+      if (Array.isArray(value)) {
+        for (const v of value) newResponse.headers.append(key, v);
+      } else {
+        newResponse.headers.append(key, value);
+      }
+    }
 
     return { response: newResponse };
   }
 }
 ```
 
-`CookieSessionStorage` provides `this.cookieName`, `this.cookieOptions`, `buildSetCookie()`, and implements `saveSession()`/`clearSession()` using your `applyHeaders()`.
+`CookieSessionStorage` provides `this.cookieName`, `this.cookieOptions`, and generic `setCookie`/`clearCookie`/`serializeCookie` primitives. `getSession`/`saveSession`/`clearSession` are one-line wrappers — you only implement `getCookie`.
 
 ### 3. Create Service
 
@@ -117,13 +122,18 @@ export const authMiddleware = () => {
         undefined,
         refreshedSessionData,
       );
-      if (headers?.['Set-Cookie']) {
+      const setCookie = headers?.['Set-Cookie'];
+      if (setCookie) {
         const newResponse = new Response(result.response.body, {
           status: result.response.status,
           statusText: result.response.statusText,
           headers: result.response.headers,
         });
-        newResponse.headers.set('Set-Cookie', headers['Set-Cookie']);
+        // Append each entry — never `.set()` with an array (comma-joined
+        // Set-Cookie is not a valid single HTTP header).
+        for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
+          newResponse.headers.append('Set-Cookie', v);
+        }
         return { ...result, response: newResponse };
       }
     }
@@ -160,7 +170,7 @@ auth.claims.sid; // string
 | `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key                       |
 | `WORKOS_REDIRECT_URI`     | `redirectUri`    | OAuth callback URL                   |
 | `WORKOS_COOKIE_PASSWORD`  | `cookiePassword` | 32+ char encryption key              |
-| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos_session`) |
+| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos-session`) |
 | `WORKOS_COOKIE_MAX_AGE`   | `cookieMaxAge`   | Cookie lifetime in seconds           |
 | `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                        |
 | `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`           |
@@ -180,15 +190,71 @@ authService.saveSession(response, sessionData)   // → { response?, headers? }
 authService.clearSession(response)
 
 // WorkOS Operations
-authService.signOut(sessionId, { returnTo })     // → { logoutUrl, clearCookieHeader }
+authService.signOut(sessionId, { returnTo })     // → { logoutUrl, response?, headers? }
 authService.refreshSession(session, organizationId?)
 authService.switchOrganization(session, organizationId)
 
-// URL Generation
-authService.getAuthorizationUrl(options)
-authService.getSignInUrl(options)
-authService.getSignUpUrl(options)
+// URL Generation — write verifier cookie, return { url, response?, headers? }
+authService.createAuthorization(response, options)
+authService.createSignIn(response, options)
+authService.createSignUp(response, options)
+
+// Error-path cleanup for the PKCE verifier cookie
+// (response may be `undefined` for headers-only adapters)
+authService.clearPendingVerifier(response, { redirectUri? })
 ```
+
+### PKCE verifier cookie (`wos-auth-verifier`)
+
+This library binds every OAuth sign-in to a PKCE code verifier, so a leaked
+`state` value on its own cannot be used to complete a session hijack.
+
+The verifier is sealed into a single blob that serves two roles:
+
+1. It is sent to WorkOS as the OAuth `state` query parameter.
+2. It is set as a short-lived HTTP-only cookie (`wos-auth-verifier`, 10 min).
+
+The cookie is written and read through `SessionStorage`. Callers don't see
+sealed blobs or cookie options:
+
+```typescript
+// Sign in: library writes the verifier cookie via storage, returns the URL + headers
+const { url, headers } = await authService.createSignIn(response, {
+  returnPathname: '/dashboard',
+});
+return new Response(null, {
+  status: 302,
+  headers: { ...headers, Location: url },
+});
+
+// Callback: library reads the verifier via storage, byte-compares, then exchanges
+await authService.handleCallback(request, response, {
+  code,
+  state, // from URL
+});
+```
+
+On success, `handleCallback` returns a `Set-Cookie` entry in `headers` as a
+`string[]` with two values — the session cookie AND a clear for the verifier
+cookie. Adapters must append each entry as its own `Set-Cookie` HTTP header
+(never comma-join). The bag key is case-insensitive — `mergeHeaderBags`
+preserves the adapter's casing — so look it up that way:
+
+```ts
+const setCookie =
+  result.headers?.['Set-Cookie'] ?? result.headers?.['set-cookie'];
+if (setCookie) {
+  for (const v of Array.isArray(setCookie) ? setCookie : [setCookie]) {
+    response.headers.append('Set-Cookie', v);
+  }
+}
+```
+
+Mismatched state and cookie raise `OAuthStateMismatchError`. A missing cookie
+(typical cause: Set-Cookie stripped by a proxy) raises
+`PKCECookieMissingError`. On either error path — or any early bail-out before
+`handleCallback` runs — call `authService.clearPendingVerifier(response)` to
+emit a delete header.
 
 ### Direct Access (Advanced)
 
@@ -198,14 +264,15 @@ For maximum control, use the primitives directly:
 import {
   AuthKitCore,
   AuthOperations,
-  getWorkOS,
   getConfigurationProvider,
+  getWorkOS,
+  sessionEncryption,
 } from '@workos/authkit-session';
 
-const config = getConfigurationProvider();
-const client = getWorkOS(config.getConfig());
-const core = new AuthKitCore(config, client, encryption);
-const operations = new AuthOperations(core, client, config);
+const config = getConfigurationProvider().getConfig();
+const client = getWorkOS();
+const core = new AuthKitCore(config, client, sessionEncryption);
+const operations = new AuthOperations(core, client, config, sessionEncryption);
 
 // Use core.validateAndRefresh(), core.encryptSession(), etc.
 ```
@@ -213,7 +280,7 @@ const operations = new AuthOperations(core, client, config);
 ## Technical Details
 
 - **JWKS Caching**: Keys fetched on-demand, cached for process lifetime. `jose` handles key rotation automatically.
-- **Token Expiry Buffer**: 60 seconds default. Tokens refresh before actual expiry.
+- **Token Refresh**: `validateAndRefresh` refreshes when `verifyToken` fails (i.e. when the access token is expired or invalid). `isTokenExpiring(token, buffer)` is available as a separate helper for callers that want to proactively refresh before expiry.
 - **Session Encryption**: AES-256-CBC + SHA-256 HMAC via `iron-webcrypto`.
 - **Lazy Initialization**: `createAuthService()` defers initialization until first use, allowing `configure()` to be called later.
 

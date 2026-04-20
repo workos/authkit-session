@@ -1,10 +1,13 @@
+import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
+import { unsealState } from '../core/pkce/state.js';
 import { AuthOperations } from './AuthOperations.js';
 
 const mockConfig = {
   clientId: 'test-client-id',
   redirectUri: 'http://localhost:3000/callback',
   cookieName: 'wos-session',
-};
+  cookiePassword: 'this-is-a-test-password-that-is-32-characters-long!',
+} as const;
 
 const mockUser = {
   id: 'user_123',
@@ -42,23 +45,45 @@ const mockCore = {
   encryptSession: async () => 'encrypted-session-data',
 };
 
-const mockClient = {
-  userManagement: {
-    getLogoutUrl: ({ sessionId, returnTo }: any) =>
-      `https://api.workos.com/sso/logout?session_id=${sessionId}&return_to=${returnTo || ''}`,
-    getAuthorizationUrl: ({ clientId, redirectUri, screenHint, state }: any) =>
-      `https://api.workos.com/sso/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&screen_hint=${screenHint || ''}&state=${state || ''}`,
-  },
-};
+function makeAuthUrlClient(capture?: { last?: Record<string, unknown> }) {
+  return {
+    pkce: {
+      generate: async () => ({
+        codeVerifier: 'generated-verifier-1234567890abcdef',
+        codeChallenge: 'generated-challenge',
+        codeChallengeMethod: 'S256',
+      }),
+    },
+    userManagement: {
+      getLogoutUrl: ({ sessionId, returnTo }: any) =>
+        `https://api.workos.com/sso/logout?session_id=${sessionId}&return_to=${returnTo || ''}`,
+      getAuthorizationUrl: (opts: any) => {
+        if (capture) capture.last = opts;
+        const params = new URLSearchParams({
+          client_id: opts.clientId,
+          redirect_uri: opts.redirectUri,
+          state: opts.state ?? '',
+          screen_hint: opts.screenHint ?? '',
+          code_challenge: opts.codeChallenge ?? '',
+          code_challenge_method: opts.codeChallengeMethod ?? '',
+        });
+        return `https://api.workos.com/sso/authorize?${params.toString()}`;
+      },
+    },
+  };
+}
 
 describe('AuthOperations', () => {
   let operations: AuthOperations;
+  let capture: { last?: Record<string, unknown> };
 
   beforeEach(() => {
+    capture = {};
     operations = new AuthOperations(
       mockCore as any,
-      mockClient as any,
+      makeAuthUrlClient(capture) as any,
       mockConfig as any,
+      sessionEncryption,
     );
   });
 
@@ -148,8 +173,9 @@ describe('AuthOperations', () => {
       };
       const testOps = new AuthOperations(
         coreWithSpy as any,
-        mockClient as any,
+        makeAuthUrlClient() as any,
         mockConfig as any,
+        sessionEncryption,
       );
 
       const session = {
@@ -193,8 +219,9 @@ describe('AuthOperations', () => {
       };
       const testOps = new AuthOperations(
         coreWithSpy as any,
-        mockClient as any,
+        makeAuthUrlClient() as any,
         mockConfig as any,
+        sessionEncryption,
       );
 
       const session = {
@@ -213,87 +240,105 @@ describe('AuthOperations', () => {
     });
   });
 
-  describe('getAuthorizationUrl()', () => {
-    it('returns WorkOS authorization URL', async () => {
-      const result = await operations.getAuthorizationUrl();
+  describe('createAuthorization()', () => {
+    it('returns url + sealedState + cookieOptions for storage dispatch', async () => {
+      const result = await operations.createAuthorization();
 
-      expect(result).toContain('client_id=test-client-id');
-      expect(result).toContain('redirect_uri');
+      expect(typeof result.url).toBe('string');
+      expect(typeof result.sealedState).toBe('string');
+      expect(result.sealedState.length).toBeGreaterThan(0);
+      expect(result.cookieOptions.maxAge).toBe(600);
+      expect(result.cookieOptions.path).toBe('/');
+      expect(result.url).toContain('client_id=test-client-id');
     });
 
-    it('encodes returnPathname in URL-safe base64 state', async () => {
-      const result = await operations.getAuthorizationUrl({
+    it('passes the sealedState as the URL state param (identical string)', async () => {
+      const result = await operations.createAuthorization();
+      const urlState = decodeURIComponent(
+        new URL(result.url).searchParams.get('state') ?? '',
+      );
+
+      expect(urlState).toBe(result.sealedState);
+    });
+
+    it('includes codeChallenge + codeChallengeMethod in WorkOS URL', async () => {
+      await operations.createAuthorization();
+
+      expect(capture.last?.codeChallenge).toBe('generated-challenge');
+      expect(capture.last?.codeChallengeMethod).toBe('S256');
+    });
+
+    it('seals returnPathname into the state blob', async () => {
+      const result = await operations.createAuthorization({
         returnPathname: '/dashboard',
       });
+      const unsealed = await unsealState(
+        sessionEncryption,
+        mockConfig.cookiePassword,
+        result.sealedState,
+      );
 
-      expect(result).toContain('state=');
-      const stateMatch = result.match(/state=([^&]+)/);
-      expect(stateMatch).toBeTruthy();
-
-      // Decode URL-safe base64: reverse - to +, _ to /
-      const urlSafeState = stateMatch![1]!;
-      const standardBase64 = urlSafeState.replace(/-/g, '+').replace(/_/g, '/');
-      const decoded = JSON.parse(atob(standardBase64));
-      expect(decoded.returnPathname).toBe('/dashboard');
+      expect(unsealed.returnPathname).toBe('/dashboard');
+      expect(unsealed.codeVerifier).toBe('generated-verifier-1234567890abcdef');
     });
 
-    it('combines internal state with custom user state', async () => {
-      const result = await operations.getAuthorizationUrl({
-        returnPathname: '/profile',
+    it('seals customState into the state blob', async () => {
+      const result = await operations.createAuthorization({
         state: 'my-custom-state',
       });
+      const unsealed = await unsealState(
+        sessionEncryption,
+        mockConfig.cookiePassword,
+        result.sealedState,
+      );
 
-      expect(result).toContain('state=');
-      const stateMatch = result.match(/state=([^&]+)/);
-      expect(stateMatch).toBeTruthy();
-
-      // State should be in format: internal.userState
-      const fullState = stateMatch![1]!;
-      expect(fullState).toContain('.');
-      const [internal, userState] = fullState.split('.');
-      expect(userState).toBe('my-custom-state');
-
-      // Decode internal part
-      const standardBase64 = internal!.replace(/-/g, '+').replace(/_/g, '/');
-      const decoded = JSON.parse(atob(standardBase64));
-      expect(decoded.returnPathname).toBe('/profile');
+      expect(unsealed.customState).toBe('my-custom-state');
     });
 
-    it('passes custom state as-is when no returnPathname', async () => {
-      const result = await operations.getAuthorizationUrl({
-        state: 'only-user-state',
+    it('seals both returnPathname and customState together', async () => {
+      const result = await operations.createAuthorization({
+        returnPathname: '/profile',
+        state: 'custom',
       });
+      const unsealed = await unsealState(
+        sessionEncryption,
+        mockConfig.cookiePassword,
+        result.sealedState,
+      );
 
-      expect(result).toContain('state=');
-      const stateMatch = result.match(/state=([^&]+)/);
-      expect(stateMatch).toBeTruthy();
-
-      // State should be passed through directly without internal wrapper
-      expect(stateMatch![1]).toBe('only-user-state');
+      expect(unsealed.returnPathname).toBe('/profile');
+      expect(unsealed.customState).toBe('custom');
     });
 
     it('includes screenHint when provided', async () => {
-      const result = await operations.getAuthorizationUrl({
+      const result = await operations.createAuthorization({
         screenHint: 'sign-up',
       });
 
-      expect(result).toContain('screen_hint=sign-up');
+      expect(result.url).toContain('screen_hint=sign-up');
+    });
+
+    it('generates a unique nonce per call (concurrent last-flow-wins)', async () => {
+      const a = await operations.createAuthorization();
+      const b = await operations.createAuthorization();
+
+      expect(a.sealedState).not.toBe(b.sealedState);
     });
   });
 
-  describe('getSignInUrl()', () => {
+  describe('createSignIn()', () => {
     it('returns authorization URL with sign-in hint', async () => {
-      const result = await operations.getSignInUrl();
+      const result = await operations.createSignIn();
 
-      expect(result).toContain('screen_hint=sign-in');
+      expect(result.url).toContain('screen_hint=sign-in');
     });
   });
 
-  describe('getSignUpUrl()', () => {
+  describe('createSignUp()', () => {
     it('returns authorization URL with sign-up hint', async () => {
-      const result = await operations.getSignUpUrl();
+      const result = await operations.createSignUp();
 
-      expect(result).toContain('screen_hint=sign-up');
+      expect(result.url).toContain('screen_hint=sign-up');
     });
   });
 });

@@ -63,6 +63,9 @@ export { getWorkOS } from './core/client/workos.js';
 // ============================================
 export {
   AuthKitError,
+  OAuthStateMismatchError,
+  PKCECookieMissingError,
+  PKCEPayloadTooLargeError,
   SessionEncryptionError,
   TokenValidationError,
   TokenRefreshError,

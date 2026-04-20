@@ -1,10 +1,15 @@
 import type { WorkOS } from '@workos-inc/node';
 import type { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import {
+  type GeneratedAuthorizationUrl,
+  generateAuthorizationUrl,
+} from '../core/pkce/generateAuthorizationUrl.js';
 import type {
   AuthResult,
   GetAuthorizationUrlOptions,
   Session,
+  SessionEncryption,
 } from '../core/session/types.js';
 
 /**
@@ -23,11 +28,18 @@ export class AuthOperations {
   private core: AuthKitCore;
   private client: WorkOS;
   private config: AuthKitConfig;
+  private encryption: SessionEncryption;
 
-  constructor(core: AuthKitCore, client: WorkOS, config: AuthKitConfig) {
+  constructor(
+    core: AuthKitCore,
+    client: WorkOS,
+    config: AuthKitConfig,
+    encryption: SessionEncryption,
+  ) {
     this.core = core;
     this.client = client;
     this.config = config;
+    this.encryption = encryption;
   }
 
   /**
@@ -115,63 +127,45 @@ export class AuthOperations {
   }
 
   /**
-   * Get authorization URL for WorkOS authentication.
+   * Create a PKCE-bound WorkOS authorization URL.
    *
-   * State encoding format: `{internal}.{userState}` where internal is URL-safe
-   * base64 encoded JSON containing returnPathname. This allows customers to
-   * pass their own state through the OAuth flow.
+   * Returns the URL, the sealed state blob (to be used as both the cookie
+   * value and — already present in the URL — the OAuth `state` param), and
+   * the cookie options the verifier cookie should be written with.
+   * AuthService dispatches the write via `SessionStorage.setCookie`.
    *
-   * @param options - Authorization URL options (returnPathname, screenHint, state, etc.)
-   * @returns The authorization URL
+   * @param options - returnPathname, screenHint, custom state, redirectUri, etc.
    */
-  async getAuthorizationUrl(
+  async createAuthorization(
     options: GetAuthorizationUrlOptions = {},
-  ): Promise<string> {
-    // Build the combined state parameter (matches authkit-nextjs format)
-    const internalState = options.returnPathname
-      ? btoa(JSON.stringify({ returnPathname: options.returnPathname }))
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-      : null;
-
-    // If both internal and custom state, combine as internal.custom
-    // Otherwise use whichever is provided
-    const state =
-      internalState && options.state
-        ? `${internalState}.${options.state}`
-        : internalState || options.state || undefined;
-
-    return this.client.userManagement.getAuthorizationUrl({
-      provider: 'authkit',
-      redirectUri: options.redirectUri ?? this.config.redirectUri,
-      screenHint: options.screenHint,
-      organizationId: options.organizationId,
-      loginHint: options.loginHint,
-      prompt: options.prompt,
-      clientId: this.config.clientId,
-      state,
+  ): Promise<GeneratedAuthorizationUrl> {
+    return generateAuthorizationUrl({
+      client: this.client,
+      config: this.config,
+      encryption: this.encryption,
+      options,
     });
   }
 
   /**
-   * Convenience method: Get sign-in URL.
+   * Convenience method: Create sign-in authorization URL.
    */
-  async getSignInUrl(
+  async createSignIn(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
-    return this.getAuthorizationUrl({
+  ): Promise<GeneratedAuthorizationUrl> {
+    return this.createAuthorization({
       ...options,
       screenHint: 'sign-in',
     });
   }
 
   /**
-   * Convenience method: Get sign-up URL.
+   * Convenience method: Create sign-up authorization URL.
    */
-  async getSignUpUrl(
+  async createSignUp(
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ): Promise<string> {
-    return this.getAuthorizationUrl({
+  ): Promise<GeneratedAuthorizationUrl> {
+    return this.createAuthorization({
       ...options,
       screenHint: 'sign-up',
     });

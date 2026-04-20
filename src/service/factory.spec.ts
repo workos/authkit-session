@@ -40,9 +40,10 @@ describe('createAuthService', () => {
       expect(typeof service.saveSession).toBe('function');
       expect(typeof service.clearSession).toBe('function');
       expect(typeof service.signOut).toBe('function');
-      expect(typeof service.getAuthorizationUrl).toBe('function');
-      expect(typeof service.getSignInUrl).toBe('function');
-      expect(typeof service.getSignUpUrl).toBe('function');
+      expect(typeof service.createAuthorization).toBe('function');
+      expect(typeof service.createSignIn).toBe('function');
+      expect(typeof service.createSignUp).toBe('function');
+      expect(typeof service.clearPendingVerifier).toBe('function');
       expect(typeof service.getWorkOS).toBe('function');
       expect(typeof service.handleCallback).toBe('function');
     });

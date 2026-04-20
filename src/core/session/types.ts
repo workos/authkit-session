@@ -72,9 +72,57 @@ export interface Session {
   impersonator?: Impersonator;
 }
 
+/**
+ * Map of HTTP response headers.
+ *
+ * `Set-Cookie` MUST be represented as `string[]` when multiple values exist
+ * — adapters must append each entry as its own header, never comma-join.
+ * A comma-joined `Set-Cookie` string is not a valid single HTTP header.
+ */
 export type HeadersBag = Record<string, string | string[]>;
 
 export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
+  /**
+   * Read a named cookie from a request.
+   *
+   * MUST return the URL-decoded value (the inverse of `setCookie`'s
+   * `encodeURIComponent` on write). Returning raw on-wire bytes will break
+   * byte-comparison against the original value — notably PKCE state
+   * verification — for any seal format that contains characters
+   * `encodeURIComponent` escapes (`+`, `=`, etc.).
+   *
+   * @param request Framework-specific request object.
+   * @param name Cookie name.
+   * @returns The URL-decoded cookie value or null if absent.
+   */
+  getCookie(request: TRequest, name: string): Promise<string | null>;
+
+  /**
+   * Write a named cookie to a response.
+   * @param response Framework-specific response object (or undefined to emit headers only).
+   * @param name Cookie name.
+   * @param value Cookie value (will be URL-encoded).
+   * @param options Per-call cookie options.
+   */
+  setCookie(
+    response: TResponse | undefined,
+    name: string,
+    value: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
+
+  /**
+   * Clear a named cookie by emitting a Set-Cookie with Max-Age=0.
+   * @param response Framework-specific response object (or undefined to emit headers only).
+   * @param name Cookie name.
+   * @param options Cookie options (must match those used at set time, especially `path`).
+   */
+  clearCookie(
+    response: TResponse | undefined,
+    name: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }>;
+
   /*
    * Extract session data from a request object
    * @param request the framework-specific request object.
@@ -117,9 +165,25 @@ export interface SessionEncryption {
     encryptedData: string,
     options: {
       password: string;
+      ttl?: number | undefined;
     },
   ) => Promise<T>;
 }
+
+/**
+ * Result shape returned by `createAuthorization` / `createSignIn` / `createSignUp`.
+ *
+ * The verifier cookie is written internally via `SessionStorage.setCookie` — callers
+ * only need to redirect the browser to `url` and apply any returned `headers`/`response`.
+ */
+export interface GetAuthorizationUrlResult {
+  url: string;
+}
+
+export type CreateAuthorizationResult<TResponse> = GetAuthorizationUrlResult & {
+  response?: TResponse;
+  headers?: HeadersBag;
+};
 
 export interface CookieOptions {
   path?: string;
@@ -142,12 +206,25 @@ export interface AuthUrlOptions {
   organizationId?: string;
   loginHint?: string;
   prompt?: 'login' | 'none' | 'consent' | 'select_account';
-  /** Custom state to pass through the OAuth flow. Returned in handleCallback. */
+  /**
+   * Custom state to pass through the OAuth flow. Returned in handleCallback.
+   *
+   * Bounded at 2048 UTF-8 bytes. The value is sealed alongside the PKCE
+   * verifier and stored in the `wos-auth-verifier` cookie; oversized values
+   * would push the cookie past the per-cookie browser limit (~4 KB) and
+   * would be silently dropped. Values over the supported limit throw
+   * `PKCEPayloadTooLargeError` at sign-in time.
+   *
+   * Note: total sealed payload size — not just `state` — drives the hard
+   * failure. Combining a large `returnPathname`, `redirectUri`, or
+   * `cookieDomain` with near-limit `state` can still overflow.
+   */
   state?: string;
 }
 
 /**
- * Options for getAuthorizationUrl, including screenHint
+ * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
+ * including the `screenHint` selector used by the sign-in/sign-up variants.
  */
 export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
   screenHint?: 'sign-up' | 'sign-in';

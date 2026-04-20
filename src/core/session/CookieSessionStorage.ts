@@ -1,17 +1,8 @@
 import type { AuthKitConfig } from '../config/types.js';
-import type { HeadersBag, SessionStorage } from './types.js';
+import { serializeCookie } from './serializeCookie.js';
+import type { CookieOptions, HeadersBag, SessionStorage } from './types.js';
 
-export interface CookieOptions {
-  path?: string;
-  domain?: string;
-  maxAge?: number;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: 'lax' | 'strict' | 'none';
-  priority?: 'low' | 'medium' | 'high';
-  partitioned?: boolean;
-}
+export type { CookieOptions } from './types.js';
 
 export abstract class CookieSessionStorage<
   TRequest,
@@ -21,7 +12,10 @@ export abstract class CookieSessionStorage<
   protected readonly cookieOptions: CookieOptions;
 
   constructor(config: AuthKitConfig) {
-    this.cookieName = config.cookieName ?? 'wos_session';
+    // Matches the canonical default in ConfigurationProvider. This fallback
+    // only fires when a caller instantiates the class with a config that
+    // hasn't been resolved through the provider.
+    this.cookieName = config.cookieName ?? 'wos-session';
 
     const sameSite = config.cookieSameSite ?? 'lax';
 
@@ -54,40 +48,66 @@ export abstract class CookieSessionStorage<
     /* default no-op. Adapters can override if they CAN mutate a native response */
   }
 
-  protected buildSetCookie(value: string, expired?: boolean): string {
-    const a = [`${this.cookieName}=${encodeURIComponent(value)}`];
-    const o = this.cookieOptions;
-    if (o.path) a.push(`Path=${o.path}`);
-    if (o.domain) a.push(`Domain=${o.domain}`);
-    if (o.maxAge || expired) a.push(`Max-Age=${expired ? 0 : o.maxAge}`);
-    if (o.httpOnly) a.push('HttpOnly');
-    if (o.secure) a.push('Secure');
-    if (o.sameSite) {
-      const capitalizedSameSite =
-        o.sameSite.charAt(0).toUpperCase() + o.sameSite.slice(1).toLowerCase();
-      a.push(`SameSite=${capitalizedSameSite}`);
-    }
-    if (o.priority) a.push(`Priority=${o.priority}`);
-    if (o.partitioned) a.push('Partitioned');
-    return a.join('; ');
+  protected serializeCookie(
+    name: string,
+    value: string,
+    options: CookieOptions,
+    flags: { expired?: boolean } = {},
+  ): string {
+    return serializeCookie(name, value, options, flags);
   }
 
-  abstract getSession(request: TRequest): Promise<string | null>;
+  /**
+   * Read a named cookie from the framework-specific request.
+   *
+   * Implementations MUST return the URL-decoded value — the inverse of
+   * `serializeCookie`'s `encodeURIComponent` on write. Returning the raw
+   * on-wire bytes will silently break byte-comparison against the original
+   * value (e.g. PKCE state verification) for any seal containing characters
+   * that `encodeURIComponent` escapes.
+   */
+  abstract getCookie(request: TRequest, name: string): Promise<string | null>;
 
-  async saveSession(
+  async setCookie(
+    response: TResponse | undefined,
+    name: string,
+    value: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const header = this.serializeCookie(name, value, options);
+    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
+    return mutated ?? { headers: { 'Set-Cookie': header } };
+  }
+
+  async clearCookie(
+    response: TResponse | undefined,
+    name: string,
+    options: CookieOptions,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const header = this.serializeCookie(name, '', options, { expired: true });
+    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
+    return mutated ?? { headers: { 'Set-Cookie': header } };
+  }
+
+  getSession(request: TRequest): Promise<string | null> {
+    return this.getCookie(request, this.cookieName);
+  }
+
+  saveSession(
     response: TResponse | undefined,
     sessionData: string,
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const header = this.buildSetCookie(sessionData);
-    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
-    return mutated ?? { headers: { 'Set-Cookie': header } };
+    return this.setCookie(
+      response,
+      this.cookieName,
+      sessionData,
+      this.cookieOptions,
+    );
   }
 
-  async clearSession(
-    response: TResponse,
+  clearSession(
+    response: TResponse | undefined,
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const header = this.buildSetCookie('', true);
-    const mutated = await this.applyHeaders(response, { 'Set-Cookie': header });
-    return mutated ?? { headers: { 'Set-Cookie': header } };
+    return this.clearCookie(response, this.cookieName, this.cookieOptions);
   }
 }

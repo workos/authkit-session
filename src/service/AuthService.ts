@@ -1,9 +1,14 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import {
+  getPKCECookieOptions,
+  PKCE_COOKIE_NAME,
+} from '../core/pkce/cookieOptions.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
+  CreateAuthorizationResult,
   CustomClaims,
   GetAuthorizationUrlOptions,
   HeadersBag,
@@ -11,6 +16,39 @@ import type {
   SessionEncryption,
   SessionStorage,
 } from '../core/session/types.js';
+
+/**
+ * Merge two `HeadersBag` values. `Set-Cookie` matching is case-insensitive;
+ * existing key casing is preserved. Multiple `Set-Cookie` values are
+ * concatenated into a `string[]`. Other keys are shallow-merged (second wins).
+ */
+function mergeHeaderBags(
+  a: HeadersBag | undefined,
+  b: HeadersBag | undefined,
+): HeadersBag | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const merged: HeadersBag = { ...a };
+  let setCookieKey = Object.keys(merged).find(
+    k => k.toLowerCase() === 'set-cookie',
+  );
+  for (const [key, value] of Object.entries(b)) {
+    if (key.toLowerCase() !== 'set-cookie') {
+      merged[key] = value;
+      continue;
+    }
+    if (!setCookieKey) {
+      merged[key] = value;
+      setCookieKey = key;
+      continue;
+    }
+    const left = merged[setCookieKey]!;
+    const leftArr = Array.isArray(left) ? left : [left];
+    const rightArr = Array.isArray(value) ? value : [value];
+    merged[setCookieKey] = [...leftArr, ...rightArr];
+  }
+  return merged;
+}
 
 /**
  * Framework-agnostic authentication service.
@@ -23,7 +61,7 @@ import type {
  * Provides common patterns:
  * - `withAuth()` - Validate session with auto-refresh
  * - `handleCallback()` - Process OAuth callback
- * - `signOut()`, `getSignInUrl()`, etc. - Delegate to AuthOperations
+ * - `signOut()`, `createSignIn()`, etc. - Delegate to AuthOperations
  *
  * **Used by:** @workos/authkit-tanstack-react-start
  */
@@ -44,7 +82,7 @@ export class AuthService<TRequest, TResponse> {
     this.storage = storage;
     this.client = client;
     this.core = new AuthKitCore(config, client, encryption);
-    this.operations = new AuthOperations(this.core, client, config);
+    this.operations = new AuthOperations(this.core, client, config, encryption);
   }
 
   /**
@@ -179,28 +217,75 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
-   * Get authorization URL - delegates to AuthOperations.
+   * Create an authorization URL and write the PKCE verifier cookie.
+   *
+   * @param response - Framework-specific response object (may be undefined —
+   *   adapters that mutate responses in-place will get back a mutated copy).
+   * @param options - screenHint, returnPathname, custom state, redirectUri, etc.
+   * @returns The URL to redirect the browser to, plus storage's
+   *   `{ response?, headers? }` carrying the verifier `Set-Cookie`.
    */
-  async getAuthorizationUrl(options: GetAuthorizationUrlOptions = {}) {
-    return this.operations.getAuthorizationUrl(options);
+  async createAuthorization(
+    response: TResponse | undefined,
+    options: GetAuthorizationUrlOptions = {},
+  ): Promise<CreateAuthorizationResult<TResponse>> {
+    const { url, sealedState, cookieOptions } =
+      await this.operations.createAuthorization(options);
+    const write = await this.storage.setCookie(
+      response,
+      PKCE_COOKIE_NAME,
+      sealedState,
+      cookieOptions,
+    );
+    return { url, ...write };
   }
 
   /**
-   * Convenience: Get sign-in URL.
+   * Convenience: Create sign-in URL and write the PKCE verifier cookie.
    */
-  async getSignInUrl(
+  async createSignIn(
+    response: TResponse | undefined,
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
-    return this.operations.getSignInUrl(options);
+  ): Promise<CreateAuthorizationResult<TResponse>> {
+    return this.createAuthorization(response, {
+      ...options,
+      screenHint: 'sign-in',
+    });
   }
 
   /**
-   * Convenience: Get sign-up URL.
+   * Convenience: Create sign-up URL and write the PKCE verifier cookie.
    */
-  async getSignUpUrl(
+  async createSignUp(
+    response: TResponse | undefined,
     options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
-  ) {
-    return this.operations.getSignUpUrl(options);
+  ): Promise<CreateAuthorizationResult<TResponse>> {
+    return this.createAuthorization(response, {
+      ...options,
+      screenHint: 'sign-up',
+    });
+  }
+
+  /**
+   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie.
+   *
+   * Use on any exit path where a sign-in was started (verifier cookie
+   * written) but `handleCallback` will not run to clear it — OAuth error
+   * responses, missing `code`, early bail-outs.
+   *
+   * Pass `options.redirectUri` on requests that used a per-request
+   * `redirectUri` override at sign-in time, so the delete cookie's computed
+   * attributes (notably `secure`) match what was originally set.
+   */
+  async clearPendingVerifier(
+    response: TResponse | undefined,
+    options?: Pick<GetAuthorizationUrlOptions, 'redirectUri'>,
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    return this.storage.clearCookie(
+      response,
+      PKCE_COOKIE_NAME,
+      getPKCECookieOptions(this.config, options?.redirectUri),
+    );
   }
 
   /**
@@ -213,76 +298,116 @@ export class AuthService<TRequest, TResponse> {
 
   /**
    * Handle OAuth callback.
-   * This creates a new session after successful authentication.
    *
-   * @param request - Framework-specific request (not currently used)
-   * @param response - Framework-specific response
-   * @param options - OAuth callback options (code, state)
-   * @returns Updated response, return pathname, and auth response
+   * Reads the verifier cookie via storage, verifies it against the URL
+   * `state`, exchanges the code, saves the session, and — on success —
+   * also emits a verifier-delete `Set-Cookie` so `HeadersBag['Set-Cookie']`
+   * carries both entries as a `string[]`. Adapters MUST append each
+   * `Set-Cookie` as its own header (never comma-join).
+   *
+   * Error-path cleanup: if any step after the cookie read throws
+   * (state mismatch, tampered seal, code-exchange failure, session-save
+   * failure), `handleCallback` attempts a best-effort `clearCookie` on the
+   * response before rethrowing so the verifier does not linger for its full
+   * 600s TTL. Response-mutating adapters get the delete `Set-Cookie`
+   * applied in place; headers-only adapters should still call
+   * `clearPendingVerifier` in their catch block to capture the headers bag.
    */
   async handleCallback(
-    _request: TRequest,
+    request: TRequest,
     response: TResponse,
-    options: { code: string; state?: string },
+    options: {
+      code: string;
+      state: string | undefined;
+    },
   ) {
-    // Authenticate with WorkOS using the OAuth code
-    const authResponse = await this.client.userManagement.authenticateWithCode({
-      code: options.code,
-      clientId: this.config.clientId,
-    });
+    const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
 
-    // Create and save the new session
-    const session: Session = {
-      accessToken: authResponse.accessToken,
-      refreshToken: authResponse.refreshToken,
-      user: authResponse.user,
-      impersonator: authResponse.impersonator,
-    };
-
-    const encryptedSession = await this.core.encryptSession(session);
-    const { response: updatedResponse, headers } = await this.saveSession(
-      response,
-      encryptedSession,
-    );
-
-    // Parse state: format is `{internal}.{userState}` or legacy `{base64JSON}`
-    let returnPathname = '/';
-    let customState: string | undefined;
-
-    if (options.state) {
-      if (options.state.includes('.')) {
-        const [internal, ...rest] = options.state.split('.');
-        customState = rest.join('.'); // Rejoin in case userState contains dots
-        try {
-          // Reverse URL-safe base64 encoding and decode
-          const decoded = (internal ?? '')
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
-          const parsed = JSON.parse(atob(decoded));
-          returnPathname = parsed.returnPathname || '/';
-        } catch {
-          // Malformed internal state, use default
-        }
-      } else {
-        try {
-          const parsed = JSON.parse(atob(options.state));
-          if (parsed.returnPathname) {
-            returnPathname = parsed.returnPathname;
-          } else {
-            customState = options.state;
-          }
-        } catch {
-          customState = options.state;
-        }
-      }
+    let unsealed;
+    try {
+      unsealed = await this.core.verifyCallbackState({
+        stateFromUrl: options.state,
+        cookieValue: cookieValue ?? undefined,
+      });
+    } catch (err) {
+      // Pre-unseal failure — we don't know the per-request redirectUri
+      // override, so emit a scheme-agnostic delete: same (name, domain,
+      // path) tuple as the original set (what the browser uses to match
+      // for replacement), with `Secure` dropped in the `sameSite: 'lax'`
+      // case so the Set-Cookie is accepted over http:// callbacks too.
+      // The `sameSite: 'none'` case already forces Secure on both set and
+      // clear, so there's no scheme-mismatch risk there.
+      await this.bestEffortClearVerifier(response, undefined, {
+        schemeAgnostic: true,
+      });
+      throw err;
     }
 
-    return {
-      response: updatedResponse,
-      headers,
-      returnPathname,
-      state: customState,
-      authResponse,
-    };
+    const { codeVerifier, returnPathname, customState, redirectUri } = unsealed;
+    const clearOptions = getPKCECookieOptions(this.config, redirectUri);
+
+    try {
+      const authResponse =
+        await this.client.userManagement.authenticateWithCode({
+          code: options.code,
+          clientId: this.config.clientId,
+          codeVerifier,
+        });
+
+      const session: Session = {
+        accessToken: authResponse.accessToken,
+        refreshToken: authResponse.refreshToken,
+        user: authResponse.user,
+        impersonator: authResponse.impersonator,
+      };
+
+      const encryptedSession = await this.core.encryptSession(session);
+      const save = await this.storage.saveSession(response, encryptedSession);
+      const clear = await this.storage.clearCookie(
+        save.response ?? response,
+        PKCE_COOKIE_NAME,
+        clearOptions,
+      );
+
+      return {
+        response: clear.response ?? save.response,
+        headers: mergeHeaderBags(save.headers, clear.headers),
+        returnPathname: returnPathname ?? '/',
+        state: customState,
+        authResponse,
+      };
+    } catch (err) {
+      await this.bestEffortClearVerifier(response, redirectUri);
+      throw err;
+    }
+  }
+
+  /**
+   * Best-effort verifier cleanup on a `handleCallback` error path.
+   *
+   * Mutates the response in place for response-mutating adapters.
+   * Swallows storage errors — cleanup must never mask the original failure.
+   * The original error is always rethrown by the caller.
+   *
+   * `schemeAgnostic` (pre-unseal failures only): drops the `Secure` attribute
+   * on the delete when `sameSite === 'lax'` so the browser accepts the
+   * `Set-Cookie` over http:// dev callbacks. Cookie replacement matches on
+   * (name, domain, path), not `Secure`, so the tuple-matched original cookie
+   * is still cleared regardless of its original `Secure` flag.
+   */
+  private async bestEffortClearVerifier(
+    response: TResponse | undefined,
+    redirectUri: string | undefined,
+    { schemeAgnostic = false }: { schemeAgnostic?: boolean } = {},
+  ): Promise<void> {
+    const options = getPKCECookieOptions(this.config, redirectUri);
+    if (schemeAgnostic && options.sameSite === 'lax') {
+      options.secure = false;
+    }
+    try {
+      await this.storage.clearCookie(response, PKCE_COOKIE_NAME, options);
+    } catch {
+      // Swallow: cleanup is opportunistic; callers get the original error.
+    }
   }
 }
