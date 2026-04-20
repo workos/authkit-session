@@ -84,9 +84,16 @@ export type HeadersBag = Record<string, string | string[]>;
 export interface SessionStorage<TRequest, TResponse, TOptions = unknown> {
   /**
    * Read a named cookie from a request.
+   *
+   * MUST return the URL-decoded value (the inverse of `setCookie`'s
+   * `encodeURIComponent` on write). Returning raw on-wire bytes will break
+   * byte-comparison against the original value — notably PKCE state
+   * verification — for any seal format that contains characters
+   * `encodeURIComponent` escapes (`+`, `=`, etc.).
+   *
    * @param request Framework-specific request object.
    * @param name Cookie name.
-   * @returns The cookie value or null if absent.
+   * @returns The URL-decoded cookie value or null if absent.
    */
   getCookie(request: TRequest, name: string): Promise<string | null>;
 

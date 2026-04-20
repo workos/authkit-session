@@ -71,6 +71,15 @@ export abstract class CookieSessionStorage<
     return a.join('; ');
   }
 
+  /**
+   * Read a named cookie from the framework-specific request.
+   *
+   * Implementations MUST return the URL-decoded value — the inverse of
+   * `serializeCookie`'s `encodeURIComponent` on write. Returning the raw
+   * on-wire bytes will silently break byte-comparison against the original
+   * value (e.g. PKCE state verification) for any seal containing characters
+   * that `encodeURIComponent` escapes.
+   */
   abstract getCookie(request: TRequest, name: string): Promise<string | null>;
 
   async setCookie(

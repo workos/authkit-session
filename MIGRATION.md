@@ -225,15 +225,15 @@ A `wos-auth-verifier` cookie is set during sign-in and read during callback.
 - **SameSite**: `Lax` (survives the cross-site return from WorkOS). `None`
   preserved for iframe/embed flows.
 - **Max-Age**: `600` (10 minutes)
-- **Path**: scoped to the redirect URI's pathname (prevents collisions
-  between multiple AuthKit apps on the same host)
+- **Path**: `/` (cookie is sent on every same-origin request during the
+  10-minute window; the DX trade-off is documented in `getPKCECookieOptions`)
 
 **Checklist**
 
 - [ ] Edge/CDN/firewall allowlists pass the cookie through.
 - [ ] Cookie-stripping proxies don't strip `wos-auth-verifier`.
-- [ ] Multiple AuthKit apps on the same host have distinct redirect URI paths
-      (or `cookieDomain`s).
+- [ ] Multiple AuthKit apps on the same host use distinct `cookieDomain`s
+      (path-based isolation is not available — the cookie path is always `/`).
 - [ ] CSP or cookie-policy banners don't interfere with setting an `HttpOnly`
       functional cookie during OAuth.
 
