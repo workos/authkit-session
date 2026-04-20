@@ -1,8 +1,10 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
-import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
-import { PKCE_COOKIE_NAME } from '../core/pkce/constants.js';
+import {
+  getPKCECookieOptions,
+  PKCE_COOKIE_NAME,
+} from '../core/pkce/cookieOptions.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,

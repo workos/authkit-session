@@ -1,5 +1,8 @@
-export { PKCE_COOKIE_NAME } from './constants.js';
-export { getPKCECookieOptions } from './cookieOptions.js';
+export {
+  getPKCECookieOptions,
+  PKCE_COOKIE_NAME,
+  PKCE_COOKIE_MAX_AGE,
+} from './cookieOptions.js';
 export { generateAuthorizationUrl } from './generateAuthorizationUrl.js';
 export {
   type PKCEState,

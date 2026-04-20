@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { SessionEncryptionError } from '../errors.js';
 import type { SessionEncryption } from '../session/types.js';
-import { PKCE_COOKIE_MAX_AGE } from './constants.js';
+import { PKCE_COOKIE_MAX_AGE } from './cookieOptions.js';
 
 /**
  * Clock-skew tolerance (ms) for the payload-level `issuedAt` check.
