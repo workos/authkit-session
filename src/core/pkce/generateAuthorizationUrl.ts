@@ -46,6 +46,10 @@ export async function generateAuthorizationUrl(params: {
     codeVerifier: pkce.codeVerifier,
     returnPathname: options.returnPathname,
     customState: options.state,
+    // Persisted so handleCallback's verifier-delete cookie uses the same
+    // computed attributes as the original setCookie — notably `secure`,
+    // which depends on the redirect URI's protocol.
+    redirectUri: options.redirectUri,
   });
 
   const url = client.userManagement.getAuthorizationUrl({

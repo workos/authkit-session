@@ -34,6 +34,14 @@ export const StateSchema = v.object({
   issuedAt: v.number(),
   returnPathname: v.optional(v.string()),
   customState: v.optional(v.string()),
+  /**
+   * The per-request `redirectUri` override resolved at sign-in time, if the
+   * caller supplied one. Persisted so `handleCallback` can recompute the
+   * exact cookie options used at `setCookie` time — notably `secure`, which
+   * is inferred from the redirect URI's protocol. Omitted when the caller
+   * relied on the configured default.
+   */
+  redirectUri: v.optional(v.string()),
 });
 
 export type PKCEState = v.InferOutput<typeof StateSchema>;

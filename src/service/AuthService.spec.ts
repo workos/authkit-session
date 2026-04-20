@@ -546,5 +546,170 @@ describe('AuthService', () => {
 
       expect(result.returnPathname).toBe('/');
     });
+
+    it('best-effort clears the verifier cookie on OAuthStateMismatchError', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      realStorage.cookies.set(
+        'wos-auth-verifier',
+        sealedState.slice(0, -2) + 'XX',
+      );
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow(OAuthStateMismatchError);
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/',
+      );
+    });
+
+    it('best-effort clears the verifier cookie on PKCECookieMissingError', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      realStorage.cookies.delete('wos-auth-verifier');
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow(PKCECookieMissingError);
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/',
+      );
+    });
+
+    it('best-effort clears the verifier cookie when authenticateWithCode throws', async () => {
+      const realStorage = makeStorage();
+      const throwingClient = makeClient();
+      throwingClient.userManagement.authenticateWithCode = async () => {
+        throw new Error('WorkOS exchange failed');
+      };
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        throwingClient as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow('WorkOS exchange failed');
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/',
+      );
+    });
+
+    it('best-effort clears the verifier cookie when saveSession throws', async () => {
+      const realStorage = makeStorage();
+      realStorage.saveSession = async () => {
+        throw new Error('storage write failed');
+      };
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow('storage write failed');
+
+      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
+        '/',
+      );
+    });
+
+    it('swallows clearCookie errors so the original failure propagates', async () => {
+      const realStorage = makeStorage();
+      const throwingClient = makeClient();
+      throwingClient.userManagement.authenticateWithCode = async () => {
+        throw new Error('original exchange failure');
+      };
+      realStorage.clearCookie = async () => {
+        throw new Error('clearCookie blew up');
+      };
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        throwingClient as any,
+        sessionEncryption,
+      );
+
+      await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      await expect(
+        realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        }),
+      ).rejects.toThrow('original exchange failure');
+    });
+
+    it('round-trips redirectUri override through the sealed state into the clear cookie', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      // Override with an http:// URL so the `secure` attribute differs from
+      // the https:// default — proves handleCallback used the override.
+      await realService.createAuthorization('res', {
+        redirectUri: 'http://localhost:3000/callback',
+      });
+      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+
+      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.secure).toBe(
+        false,
+      );
+
+      await realService.handleCallback('req', 'res', {
+        code: 'code',
+        state: sealedState,
+      });
+
+      expect(
+        realStorage.lastClearOptions.get('wos-auth-verifier')?.secure,
+      ).toBe(false);
+    });
   });
 });

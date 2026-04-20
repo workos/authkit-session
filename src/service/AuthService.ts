@@ -304,6 +304,14 @@ export class AuthService<TRequest, TResponse> {
    * also emits a verifier-delete `Set-Cookie` so `HeadersBag['Set-Cookie']`
    * carries both entries as a `string[]`. Adapters MUST append each
    * `Set-Cookie` as its own header (never comma-join).
+   *
+   * Error-path cleanup: if any step after the cookie read throws
+   * (state mismatch, tampered seal, code-exchange failure, session-save
+   * failure), `handleCallback` attempts a best-effort `clearCookie` on the
+   * response before rethrowing so the verifier does not linger for its full
+   * 600s TTL. Response-mutating adapters get the delete `Set-Cookie`
+   * applied in place; headers-only adapters should still call
+   * `clearPendingVerifier` in their catch block to capture the headers bag.
    */
   async handleCallback(
     request: TRequest,
@@ -314,39 +322,81 @@ export class AuthService<TRequest, TResponse> {
     },
   ) {
     const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
-    const { codeVerifier, returnPathname, customState } =
-      await this.core.verifyCallbackState({
+
+    // Pre-unseal errors (state mismatch, tampered seal) — we don't yet know
+    // the per-request redirectUri override, so fall back to the configured
+    // default. Cookies are Domain-scoped and Path=/, so the browser clears
+    // regardless; only `secure` may differ, which the browser ignores when
+    // matching the delete.
+    let unsealed;
+    try {
+      unsealed = await this.core.verifyCallbackState({
         stateFromUrl: options.state,
         cookieValue: cookieValue ?? undefined,
       });
+    } catch (err) {
+      await this.bestEffortClearVerifier(response, undefined);
+      throw err;
+    }
 
-    const authResponse = await this.client.userManagement.authenticateWithCode({
-      code: options.code,
-      clientId: this.config.clientId,
-      codeVerifier,
-    });
+    const { codeVerifier, returnPathname, customState, redirectUri } = unsealed;
+    const clearOptions = getPKCECookieOptions(this.config, redirectUri);
 
-    const session: Session = {
-      accessToken: authResponse.accessToken,
-      refreshToken: authResponse.refreshToken,
-      user: authResponse.user,
-      impersonator: authResponse.impersonator,
-    };
+    try {
+      const authResponse =
+        await this.client.userManagement.authenticateWithCode({
+          code: options.code,
+          clientId: this.config.clientId,
+          codeVerifier,
+        });
 
-    const encryptedSession = await this.core.encryptSession(session);
-    const save = await this.storage.saveSession(response, encryptedSession);
-    const clear = await this.storage.clearCookie(
-      save.response ?? response,
-      PKCE_COOKIE_NAME,
-      getPKCECookieOptions(this.config),
-    );
+      const session: Session = {
+        accessToken: authResponse.accessToken,
+        refreshToken: authResponse.refreshToken,
+        user: authResponse.user,
+        impersonator: authResponse.impersonator,
+      };
 
-    return {
-      response: clear.response ?? save.response,
-      headers: mergeHeaderBags(save.headers, clear.headers),
-      returnPathname: returnPathname ?? '/',
-      state: customState,
-      authResponse,
-    };
+      const encryptedSession = await this.core.encryptSession(session);
+      const save = await this.storage.saveSession(response, encryptedSession);
+      const clear = await this.storage.clearCookie(
+        save.response ?? response,
+        PKCE_COOKIE_NAME,
+        clearOptions,
+      );
+
+      return {
+        response: clear.response ?? save.response,
+        headers: mergeHeaderBags(save.headers, clear.headers),
+        returnPathname: returnPathname ?? '/',
+        state: customState,
+        authResponse,
+      };
+    } catch (err) {
+      await this.bestEffortClearVerifier(response, redirectUri);
+      throw err;
+    }
+  }
+
+  /**
+   * Best-effort verifier cleanup on a `handleCallback` error path.
+   *
+   * Mutates the response in place for response-mutating adapters.
+   * Swallows storage errors — cleanup must never mask the original failure.
+   * The original error is always rethrown by the caller.
+   */
+  private async bestEffortClearVerifier(
+    response: TResponse | undefined,
+    redirectUri: string | undefined,
+  ): Promise<void> {
+    try {
+      await this.storage.clearCookie(
+        response,
+        PKCE_COOKIE_NAME,
+        getPKCECookieOptions(this.config, redirectUri),
+      );
+    } catch {
+      // Swallow: cleanup is opportunistic; callers get the original error.
+    }
   }
 }

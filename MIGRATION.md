@@ -207,12 +207,18 @@ try {
     err instanceof OAuthStateMismatchError ||
     err instanceof PKCECookieMissingError
   ) {
-    await auth.clearPendingVerifier(response); // reset the flow
     return redirectToSignIn();
   }
   throw err;
 }
 ```
+
+`handleCallback` best-effort clears the verifier cookie on any error after
+the cookie is read — state mismatch, tampered seal, exchange failure, or
+save failure — so response-mutating adapters don't need to call
+`clearPendingVerifier` manually. Headers-only adapters that can't observe
+the response mutation should still call `clearPendingVerifier` in the catch
+block to capture the delete `Set-Cookie` headers.
 
 ---
 
