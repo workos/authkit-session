@@ -24,7 +24,7 @@ adapter version.
 | No verifier cookie on the wire                      | New `wos-auth-verifier` cookie, `HttpOnly`, `Max-Age=600`                |
 | `handleCallback` emits a single `Set-Cookie` string | Emits `string[]` — session cookie + verifier delete                      |
 | `state` = plaintext `{internal}.{userState}`        | `state` = opaque sealed blob (custom `state` still round-trips)          |
-| No error-path cleanup helper                        | New: `clearPendingVerifier(response, { redirectUri? })`                  |
+| No error-path cleanup helper                        | New: `clearPendingVerifier(response)`                                    |
 
 ---
 
@@ -162,18 +162,7 @@ For headers-only adapters, pass `undefined`:
 const { headers } = await auth.clearPendingVerifier(undefined);
 ```
 
-If the original `createSignIn` call used a per-call `redirectUri` override,
-pass the same value so the emitted `Path=` matches the cookie's original scope:
-
-```ts
-await auth.clearPendingVerifier(response, {
-  redirectUri: 'https://app.example.com/custom/callback',
-});
-```
-
-(On callback success, the verifier is cleared automatically — the path is
-recovered from the sealed state so per-call overrides don't leak an orphan
-cookie.)
+(On callback success, the verifier is cleared automatically.)
 
 ---
 

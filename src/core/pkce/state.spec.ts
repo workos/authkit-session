@@ -30,25 +30,6 @@ describe('PKCE state seal/unseal', () => {
 
     expect(unsealed).toMatchObject(minimal);
     expect(typeof unsealed.issuedAt).toBe('number');
-    expect(unsealed.redirectUri).toBeUndefined();
-  });
-
-  it('round-trips redirectUri when stamped into the state', async () => {
-    const withRedirect: PKCEStateInput = {
-      nonce: 'n',
-      codeVerifier: 'v',
-      redirectUri: 'https://app.example.com/custom/callback',
-    };
-    const sealed = await sealState(
-      sessionEncryption,
-      testPassword,
-      withRedirect,
-    );
-    const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
-
-    expect(unsealed.redirectUri).toBe(
-      'https://app.example.com/custom/callback',
-    );
   });
 
   it('stamps issuedAt with Date.now() at seal time', async () => {

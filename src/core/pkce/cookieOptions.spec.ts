@@ -100,55 +100,23 @@ describe('getPKCECookieOptions', () => {
     });
   });
 
-  describe('path scoping', () => {
-    it('scopes path to the redirectUri pathname', () => {
-      const opts = getPKCECookieOptions({
-        ...baseConfig,
-        redirectUri: 'https://app.example.com/callback',
-      });
+  describe('path', () => {
+    it.each([
+      ['config callback path', 'https://app.example.com/callback'],
+      ['nested callback path', 'https://app.example.com/auth/v2/callback'],
+      ['host-only', 'https://app.example.com'],
+      ['invalid url', 'not-a-valid-url'],
+    ])("is always '/' regardless of redirectUri (%s)", (_label, redirectUri) => {
+      const opts = getPKCECookieOptions({ ...baseConfig, redirectUri });
 
-      expect(opts.path).toBe('/callback');
+      expect(opts.path).toBe('/');
     });
 
-    it('scopes path to nested pathname', () => {
-      const opts = getPKCECookieOptions({
-        ...baseConfig,
-        redirectUri: 'https://app.example.com/auth/v2/callback',
-      });
-
-      expect(opts.path).toBe('/auth/v2/callback');
-    });
-
-    it('prefers explicit redirectUri arg over config for path', () => {
+    it("is '/' even when per-call redirectUri override is supplied", () => {
       const opts = getPKCECookieOptions(
-        { ...baseConfig, redirectUri: 'https://app.example.com/a' },
-        'https://app.example.com/b/callback',
+        baseConfig,
+        'https://app.example.com/some/other/path',
       );
-
-      expect(opts.path).toBe('/b/callback');
-    });
-
-    it("falls back to '/' when redirectUri is missing", () => {
-      const { redirectUri: _unused, ...configWithoutUri } = baseConfig;
-      const opts = getPKCECookieOptions(configWithoutUri as AuthKitConfig);
-
-      expect(opts.path).toBe('/');
-    });
-
-    it("falls back to '/' on invalid redirectUri", () => {
-      const opts = getPKCECookieOptions({
-        ...baseConfig,
-        redirectUri: 'not-a-valid-url',
-      });
-
-      expect(opts.path).toBe('/');
-    });
-
-    it("returns '/' when redirectUri has no pathname", () => {
-      const opts = getPKCECookieOptions({
-        ...baseConfig,
-        redirectUri: 'https://app.example.com',
-      });
 
       expect(opts.path).toBe('/');
     });

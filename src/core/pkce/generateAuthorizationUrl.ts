@@ -28,10 +28,6 @@ export interface GeneratedAuthorizationUrl {
  * query param AND the cookie value — identical string; the callback does a
  * byte-compare before decrypting), and the cookie options the verifier
  * cookie should be written with.
- *
- * When `options.redirectUri` overrides the configured default, the override
- * is sealed into the PKCE state so `handleCallback` can recover it and emit
- * a matching `Path=` on the verifier-delete cookie.
  */
 export async function generateAuthorizationUrl(params: {
   client: WorkOS;
@@ -40,8 +36,7 @@ export async function generateAuthorizationUrl(params: {
   options: GetAuthorizationUrlOptions;
 }): Promise<GeneratedAuthorizationUrl> {
   const { client, config, encryption, options } = params;
-  const overrideRedirectUri = options.redirectUri;
-  const redirectUri = overrideRedirectUri ?? config.redirectUri;
+  const redirectUri = options.redirectUri ?? config.redirectUri;
 
   const pkce = await client.pkce.generate();
   const nonce = crypto.randomUUID();
@@ -51,12 +46,6 @@ export async function generateAuthorizationUrl(params: {
     codeVerifier: pkce.codeVerifier,
     returnPathname: options.returnPathname,
     customState: options.state,
-    // Only stamp when the caller overrode the config default — keeps the
-    // common-case ciphertext small and avoids polluting state with data
-    // that's already available from config.
-    ...(overrideRedirectUri !== undefined
-      ? { redirectUri: overrideRedirectUri }
-      : {}),
   });
 
   const url = client.userManagement.getAuthorizationUrl({

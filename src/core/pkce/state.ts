@@ -34,11 +34,6 @@ export const StateSchema = v.object({
   issuedAt: v.number(),
   returnPathname: v.optional(v.string()),
   customState: v.optional(v.string()),
-  // Stamped only when a caller passed a per-call `redirectUri` override at
-  // `createSignIn` time. Lets `handleCallback` recover the exact cookie path
-  // used at sign-in so the verifier-delete `Set-Cookie` `Path` attribute
-  // matches — no orphaned cookies under per-call overrides.
-  redirectUri: v.optional(v.string()),
 });
 
 export type PKCEState = v.InferOutput<typeof StateSchema>;

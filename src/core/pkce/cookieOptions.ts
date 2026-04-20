@@ -26,9 +26,11 @@ export const PKCE_COOKIE_MAX_AGE = 600;
  * - `secure` is forced to `true` when `sameSite === 'none'` (required by
  *   modern browsers). Otherwise it is inferred from the redirect URI's
  *   protocol, defaulting fail-closed to `true` on invalid/missing URLs.
- * - `path` is scoped to the redirect URI's pathname so two AuthKit apps on
- *   the same host under different subpaths don't overwrite each other's
- *   verifier cookie. Falls back to `/` when no redirect URI is available.
+ * - `path` is always `/`. The cookie gets sent on every same-origin request
+ *   during the 10-minute window, which is fine — it's HttpOnly and expires
+ *   quickly. The tradeoff favors DX: path-scoped cookies are invisible in
+ *   Chrome DevTools' Application panel from any page outside the scoped
+ *   path, which makes PKCE wiring look broken even when it works.
  *
  * Internal helper — not exported from the package. Callers get cookie options
  * indirectly via `AuthService.createSignIn` / `clearPendingVerifier`.
@@ -44,21 +46,16 @@ export function getPKCECookieOptions(
 
   const urlString = redirectUri ?? config.redirectUri;
   let secure = true;
-  let path = '/';
-  if (urlString) {
+  if (urlString && sameSite !== 'none') {
     try {
-      const parsed = new URL(urlString);
-      if (sameSite !== 'none') {
-        secure = parsed.protocol === 'https:';
-      }
-      path = parsed.pathname || '/';
+      secure = new URL(urlString).protocol === 'https:';
     } catch {
-      // Fail-closed: secure stays true, path stays '/'.
+      // Fail-closed: secure stays true.
     }
   }
 
   return {
-    path,
+    path: '/',
     httpOnly: true,
     secure,
     sameSite,

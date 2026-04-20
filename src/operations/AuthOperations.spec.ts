@@ -248,7 +248,7 @@ describe('AuthOperations', () => {
       expect(typeof result.sealedState).toBe('string');
       expect(result.sealedState.length).toBeGreaterThan(0);
       expect(result.cookieOptions.maxAge).toBe(600);
-      expect(result.cookieOptions.path).toBe('/callback');
+      expect(result.cookieOptions.path).toBe('/');
       expect(result.url).toContain('client_id=test-client-id');
     });
 
@@ -308,32 +308,6 @@ describe('AuthOperations', () => {
 
       expect(unsealed.returnPathname).toBe('/profile');
       expect(unsealed.customState).toBe('custom');
-    });
-
-    it('seals per-call redirectUri override into the state blob', async () => {
-      const result = await operations.createAuthorization({
-        redirectUri: 'https://app.example.com/custom/callback',
-      });
-      const unsealed = await unsealState(
-        sessionEncryption,
-        mockConfig.cookiePassword,
-        result.sealedState,
-      );
-
-      expect(unsealed.redirectUri).toBe(
-        'https://app.example.com/custom/callback',
-      );
-    });
-
-    it('omits redirectUri from the state blob when using the config default', async () => {
-      const result = await operations.createAuthorization();
-      const unsealed = await unsealState(
-        sessionEncryption,
-        mockConfig.cookiePassword,
-        result.sealedState,
-      );
-
-      expect(unsealed.redirectUri).toBeUndefined();
     });
 
     it('includes screenHint when provided', async () => {

@@ -278,20 +278,15 @@ export class AuthService<TRequest, TResponse> {
    * Use on any exit path where a sign-in was started (verifier cookie
    * written) but `handleCallback` will not run to clear it — OAuth error
    * responses, missing `code`, early bail-outs.
-   *
-   * Pass the same `redirectUri` that was supplied to `createSignIn`
-   * (if any) so the emitted `Path` matches the cookie's original scope —
-   * otherwise the browser retains the cookie until its Max-Age expires.
    */
   async clearPendingVerifier(
     response: TResponse | undefined,
-    options?: { redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const cookieOptions = getPKCECookieOptions(
-      this.config,
-      options?.redirectUri,
+    return this.storage.clearCookie(
+      response,
+      PKCE_COOKIE_NAME,
+      getPKCECookieOptions(this.config),
     );
-    return this.storage.clearCookie(response, PKCE_COOKIE_NAME, cookieOptions);
   }
 
   /**
@@ -320,15 +315,11 @@ export class AuthService<TRequest, TResponse> {
     },
   ) {
     const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
-    const {
-      codeVerifier,
-      returnPathname,
-      customState,
-      redirectUri: sealedRedirectUri,
-    } = await this.core.verifyCallbackState({
-      stateFromUrl: options.state,
-      cookieValue: cookieValue ?? undefined,
-    });
+    const { codeVerifier, returnPathname, customState } =
+      await this.core.verifyCallbackState({
+        stateFromUrl: options.state,
+        cookieValue: cookieValue ?? undefined,
+      });
 
     const authResponse = await this.client.userManagement.authenticateWithCode({
       code: options.code,
@@ -345,13 +336,10 @@ export class AuthService<TRequest, TResponse> {
 
     const encryptedSession = await this.core.encryptSession(session);
     const save = await this.storage.saveSession(response, encryptedSession);
-    // Use the redirectUri sealed into the state at sign-in time (when the
-    // caller overrode the default) so the clear's `Path=` matches the
-    // cookie's original scope — prevents an orphan verifier cookie.
     const clear = await this.storage.clearCookie(
       save.response ?? response,
       PKCE_COOKIE_NAME,
-      getPKCECookieOptions(this.config, sealedRedirectUri),
+      getPKCECookieOptions(this.config),
     );
 
     return {

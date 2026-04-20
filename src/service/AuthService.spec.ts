@@ -238,27 +238,8 @@ describe('AuthService', () => {
       expect(result.url).toContain('authorize');
       expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
       expect(result.headers?.['Set-Cookie']).toContain('wos-auth-verifier=');
-      // Default path from config.redirectUri pathname
       expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.path).toBe(
-        '/callback',
-      );
-    });
-
-    it('scopes the verifier cookie path to a per-call redirectUri override', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-
-      await realService.createAuthorization('res', {
-        redirectUri: 'https://app.example.com/custom/callback',
-      });
-
-      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.path).toBe(
-        '/custom/callback',
+        '/',
       );
     });
   });
@@ -298,7 +279,7 @@ describe('AuthService', () => {
   });
 
   describe('clearPendingVerifier()', () => {
-    it('emits a delete cookie with the config-default path', async () => {
+    it("emits a delete cookie with Path=/", async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
@@ -310,25 +291,7 @@ describe('AuthService', () => {
       await realService.clearPendingVerifier('res');
 
       expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
-        '/callback',
-      );
-    });
-
-    it('emits a delete cookie with a per-call redirectUri override path', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-
-      await realService.clearPendingVerifier('res', {
-        redirectUri: 'https://app.example.com/custom/callback',
-      });
-
-      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
-        '/custom/callback',
+        '/',
       );
     });
 
@@ -477,7 +440,7 @@ describe('AuthService', () => {
       ).toBe(true);
     });
 
-    it('emits the verifier-delete cookie with the default config path', async () => {
+    it('emits the verifier-delete cookie with Path=/', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(
         mockConfig as any,
@@ -495,31 +458,7 @@ describe('AuthService', () => {
       });
 
       expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
-        '/callback',
-      );
-    });
-
-    it('emits the verifier-delete cookie with the per-call redirectUri path when overridden at sign-in', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-
-      await realService.createAuthorization('res', {
-        redirectUri: 'https://app.example.com/a/callback',
-      });
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
-
-      await realService.handleCallback('req', 'res', {
-        code: 'code',
-        state: sealedState,
-      });
-
-      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
-        '/a/callback',
+        '/',
       );
     });
 

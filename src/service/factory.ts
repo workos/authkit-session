@@ -76,8 +76,8 @@ export function createAuthService<TRequest, TResponse>(options: {
       getService().createAuthorization(response, opts),
     createSignIn: (response, opts) => getService().createSignIn(response, opts),
     createSignUp: (response, opts) => getService().createSignUp(response, opts),
-    clearPendingVerifier: (response, opts) =>
-      getService().clearPendingVerifier(response, opts),
+    clearPendingVerifier: (response) =>
+      getService().clearPendingVerifier(response),
     getWorkOS: () => getService().getWorkOS(),
     handleCallback: (request, response, opts) =>
       getService().handleCallback(request, response, opts),
