@@ -37,7 +37,9 @@ function makeCore() {
   return new AuthKitCore(config as any, mockClient as any, sessionEncryption);
 }
 
-function generate(options: Parameters<typeof generateAuthorizationUrl>[0]['options'] = {}) {
+function generate(
+  options: Parameters<typeof generateAuthorizationUrl>[0]['options'] = {},
+) {
   return generateAuthorizationUrl({
     client: mockClient as any,
     config: config as any,

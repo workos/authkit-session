@@ -78,13 +78,24 @@ describe('PKCE state seal/unseal', () => {
     ['dots', 'has.many.dots.in.it'],
     ['JSON-like', '{"key":"value","nested":{"a":1}}'],
     ['2KB payload', 'x'.repeat(2048)],
-  ])('preserves %s customState byte-identically', async (_label, customState) => {
-    const input: PKCEStateInput = { nonce: 'n', codeVerifier: 'v', customState };
-    const sealed = await sealState(sessionEncryption, testPassword, input);
-    const unsealed = await unsealState(sessionEncryption, testPassword, sealed);
+  ])(
+    'preserves %s customState byte-identically',
+    async (_label, customState) => {
+      const input: PKCEStateInput = {
+        nonce: 'n',
+        codeVerifier: 'v',
+        customState,
+      };
+      const sealed = await sealState(sessionEncryption, testPassword, input);
+      const unsealed = await unsealState(
+        sessionEncryption,
+        testPassword,
+        sealed,
+      );
 
-    expect(unsealed.customState).toBe(customState);
-  });
+      expect(unsealed.customState).toBe(customState);
+    },
+  );
 
   it('throws SessionEncryptionError on tampered ciphertext', async () => {
     const sealed = await sealState(sessionEncryption, testPassword, validState);
