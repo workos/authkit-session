@@ -8,7 +8,7 @@ import type {
   SessionEncryption,
 } from '../session/types.js';
 import { getPKCECookieNameForState } from './cookieName.js';
-import { getPKCECookieOptions, PKCE_COOKIE_NAME } from './cookieOptions.js';
+import { getPKCECookieOptions } from './cookieOptions.js';
 import { sealState } from './state.js';
 
 /**

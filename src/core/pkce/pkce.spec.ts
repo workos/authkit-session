@@ -5,6 +5,7 @@ import {
   PKCECookieMissingError,
   PKCEPayloadTooLargeError,
 } from '../errors.js';
+import { getPKCECookieNameForState } from './cookieName.js';
 import {
   generateAuthorizationUrl,
   PKCE_MAX_COOKIE_BYTES,
@@ -91,7 +92,6 @@ describe('PKCE end-to-end round-trip', () => {
 
   it('returns cookieName derived from the sealed state', async () => {
     const result = await generate();
-    const { getPKCECookieNameForState } = await import('./cookieName.js');
     expect(result.cookieName).toBe(getPKCECookieNameForState(result.sealedState));
     expect(result.cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
   });
