@@ -183,6 +183,13 @@ export interface GetAuthorizationUrlResult {
 export type CreateAuthorizationResult<TResponse> = GetAuthorizationUrlResult & {
   response?: TResponse;
   headers?: HeadersBag;
+  /**
+   * Name of the PKCE verifier cookie written during this call. Useful
+   * for assertion-in-tests and for adapters that want to log the flow
+   * identifier. NOT the shape `clearPendingVerifier` consumes — that
+   * method takes `state`, not `cookieName`.
+   */
+  cookieName: string;
 };
 
 export interface CookieOptions {
