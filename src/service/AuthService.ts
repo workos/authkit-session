@@ -2,10 +2,7 @@ import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
-import {
-  getPKCECookieOptions,
-  PKCE_COOKIE_NAME,
-} from '../core/pkce/cookieOptions.js';
+import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -298,24 +295,28 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
-   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie.
+   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie
+   * for the flow identified by `state`.
    *
-   * Use on any exit path where a sign-in was started (verifier cookie
-   * written) but `handleCallback` will not run to clear it — OAuth error
-   * responses, missing `code`, early bail-outs.
+   * **Breaking change in 0.5.0.** The `state` option is now required
+   * — the per-flow cookie naming scheme has no single "legacy" name
+   * to clear. Callers typically read `state` from the callback URL;
+   * when `state` is absent (malformed callback), do not call this
+   * method. The 10-minute PKCE TTL cleans up orphans.
    *
    * Pass `options.redirectUri` on requests that used a per-request
-   * `redirectUri` override at sign-in time, so the delete cookie's computed
-   * attributes (notably `secure`) match what was originally set.
+   * `redirectUri` override at sign-in time, so the delete cookie's
+   * computed attributes (notably `secure`) match the original set.
    */
   async clearPendingVerifier(
     response: TResponse | undefined,
-    options?: Pick<GetAuthorizationUrlOptions, 'redirectUri'>,
+    options: { state: string; redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const cookieName = getPKCECookieNameForState(options.state);
     return this.storage.clearCookie(
       response,
-      PKCE_COOKIE_NAME,
-      getPKCECookieOptions(this.config, options?.redirectUri),
+      cookieName,
+      getPKCECookieOptions(this.config, options.redirectUri),
     );
   }
 

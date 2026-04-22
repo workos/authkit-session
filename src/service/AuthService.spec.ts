@@ -387,11 +387,12 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.clearPendingVerifier('res');
+      const { cookieName } = await realService.createSignIn(undefined);
+      const sealedState = realStorage.cookies.get(cookieName)!;
 
-      expect(realStorage.lastClearOptions.get('wos-auth-verifier')?.path).toBe(
-        '/',
-      );
+      await realService.clearPendingVerifier('res', { state: sealedState });
+
+      expect(realStorage.lastClearOptions.get(cookieName)?.path).toBe('/');
     });
 
     it('accepts undefined response for headers-only adapters', async () => {
@@ -403,9 +404,58 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      const result = await realService.clearPendingVerifier(undefined);
+      const { cookieName } = await realService.createSignIn(undefined);
+      const sealedState = realStorage.cookies.get(cookieName)!;
 
-      expect(result.headers?.['Set-Cookie']).toContain('wos-auth-verifier=');
+      const result = await realService.clearPendingVerifier(undefined, {
+        state: sealedState,
+      });
+
+      expect(result.headers?.['Set-Cookie']).toContain(`${cookieName}=`);
+    });
+
+    it('clears the flow-specific cookie derived from state', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { cookieName } = await realService.createSignIn(undefined);
+      const sealedState = realStorage.cookies.get(cookieName)!;
+
+      const clearCookieSpy = vi.spyOn(realStorage, 'clearCookie');
+      await realService.clearPendingVerifier(undefined, { state: sealedState });
+
+      expect(clearCookieSpy).toHaveBeenCalledWith(
+        undefined,
+        cookieName,
+        expect.any(Object),
+      );
+    });
+
+    it('threads redirectUri into the cookie options', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { cookieName } = await realService.createSignIn(undefined, {
+        redirectUri: 'https://custom.example/cb',
+      });
+      const sealedState = realStorage.cookies.get(cookieName)!;
+
+      await realService.clearPendingVerifier(undefined, {
+        state: sealedState,
+        redirectUri: 'https://custom.example/cb',
+      });
+
+      expect(realStorage.lastClearOptions.get(cookieName)?.path).toBe('/');
     });
   });
 
