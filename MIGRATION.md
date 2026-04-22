@@ -1,5 +1,43 @@
 # Migration Guide
 
+## 0.5.0 — per-flow PKCE cookies
+
+PKCE verifier cookies now carry a per-flow suffix
+(`wos-auth-verifier-<fnv1a>`) so concurrent sign-ins from multiple
+tabs no longer clobber each other. `clearPendingVerifier` now
+**requires** `options.state`.
+
+### What consumers need to change
+
+| Before                                                   | After                                                             |
+| -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `auth.clearPendingVerifier(response)`                    | `auth.clearPendingVerifier(response, { state })`                  |
+| `auth.clearPendingVerifier(response, { redirectUri })`   | `auth.clearPendingVerifier(response, { state, redirectUri })`     |
+
+Guard the call on `state` presence:
+
+```ts
+if (state) {
+  await auth.clearPendingVerifier(response, { state });
+}
+```
+
+Skip the call entirely when `state` is absent (malformed callback) —
+the 10-minute PKCE TTL cleans up orphan cookies.
+
+### New pure URL methods
+
+- `getAuthorizationUrl(options)` — returns `{ url, cookieName }`, writes no cookie.
+- `getSignInUrl(options)` — same with `screenHint: 'sign-in'`.
+- `getSignUpUrl(options)` — same with `screenHint: 'sign-up'`.
+
+Use these in adapter code paths where the cookie write is wasted
+(e.g. non-document requests in a SvelteKit `handle` hook). Browsers
+don't follow cross-origin redirects from fetch/XHR, so the cookie
+would never be used anyway.
+
+---
+
 ## 0.3.x → 0.4.0
 
 0.4.0 introduces OAuth state binding via a PKCE verifier cookie and collapses
@@ -24,7 +62,7 @@ adapter version.
 | No verifier cookie on the wire                      | New `wos-auth-verifier` cookie, `HttpOnly`, `Max-Age=600`                |
 | `handleCallback` emits a single `Set-Cookie` string | Emits `string[]` — session cookie + verifier delete                      |
 | `state` = plaintext `{internal}.{userState}`        | `state` = opaque sealed blob (custom `state` still round-trips)          |
-| No error-path cleanup helper                        | New: `clearPendingVerifier(response)`                                    |
+| No error-path cleanup helper                        | New: `clearPendingVerifier(response, { state })`                         |
 
 ---
 
@@ -149,18 +187,26 @@ must also implement `setCookie` and `clearCookie`. See `src/core/session/types.t
 
 On paths where sign-in was initiated but `handleCallback` never runs (OAuth
 error responses, missing `code`, early bail-outs), the verifier cookie would
-linger until `Max-Age` expires. Call `clearPendingVerifier` to emit a delete:
+linger until `Max-Age` expires. Call `clearPendingVerifier` with the `state`
+from the callback URL to emit a delete for the correct per-flow cookie:
 
 ```ts
-const { headers } = await auth.clearPendingVerifier(response);
-// Apply headers the same way you apply any storage output
+if (state) {
+  const { headers } = await auth.clearPendingVerifier(response, { state });
+  // Apply headers the same way you apply any storage output
+}
 ```
 
-For headers-only adapters, pass `undefined`:
+For headers-only adapters, pass `undefined` as the response:
 
 ```ts
-const { headers } = await auth.clearPendingVerifier(undefined);
+if (state) {
+  const { headers } = await auth.clearPendingVerifier(undefined, { state });
+}
 ```
+
+Skip the call entirely when `state` is absent from the callback URL
+(malformed callback) — the 10-minute PKCE TTL cleans up orphan cookies.
 
 (On callback success, the verifier is cleared automatically.)
 
@@ -238,15 +284,30 @@ the cookie is read — state mismatch, tampered seal, exchange failure, or
 save failure — so response-mutating adapters don't need to call
 `clearPendingVerifier` manually. Headers-only adapters that can't observe
 the response mutation should still call `clearPendingVerifier` in the catch
-block to capture the delete `Set-Cookie` headers.
+block to capture the delete `Set-Cookie` headers — pass the `state` from
+the callback URL so the correct per-flow cookie is cleared, and skip the
+call when `state` is absent:
+
+```ts
+try {
+  await auth.handleCallback(request, response, { code, state });
+} catch (err) {
+  if (state) {
+    await auth.clearPendingVerifier(response, { state });
+  }
+  throw err;
+}
+```
 
 ---
 
 ### 7. Verifier cookie on the wire
 
-A `wos-auth-verifier` cookie is set during sign-in and read during callback.
+A `wos-auth-verifier-<fnv1a>` cookie is set during sign-in and read during
+callback. As of 0.5.0 the cookie name carries a per-flow suffix so concurrent
+sign-ins from multiple tabs don't clobber each other.
 
-- **Name**: `wos-auth-verifier`
+- **Name**: `wos-auth-verifier-<fnv1a>` (per-flow; suffix derived from the sealed blob)
 - **HttpOnly**, **Secure** (unless explicitly `SameSite=None` without HTTPS)
 - **SameSite**: `Lax` (survives the cross-site return from WorkOS). `None`
   preserved for iframe/embed flows.
@@ -257,7 +318,7 @@ A `wos-auth-verifier` cookie is set during sign-in and read during callback.
 **Checklist**
 
 - [ ] Edge/CDN/firewall allowlists pass the cookie through.
-- [ ] Cookie-stripping proxies don't strip `wos-auth-verifier`.
+- [ ] Cookie-stripping proxies don't strip `wos-auth-verifier-*`.
 - [ ] Multiple AuthKit apps on the same host use distinct `cookieDomain`s
       (path-based isolation is not available — the cookie path is always `/`).
 - [ ] CSP or cookie-policy banners don't interfere with setting an `HttpOnly`
