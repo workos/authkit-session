@@ -268,6 +268,36 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
+   * Pure URL generation — returns the auth URL and the cookie name that
+   * WOULD be written by `createAuthorization`, but does NOT touch
+   * storage. Use this in adapter code paths where writing the verifier
+   * cookie is inappropriate (e.g. non-document requests in middleware
+   * hooks) — the browser ignores the cookie anyway because it won't
+   * follow a cross-origin redirect from fetch/XHR.
+   */
+  async getAuthorizationUrl(
+    options: GetAuthorizationUrlOptions = {},
+  ): Promise<{ url: string; cookieName: string }> {
+    const { url, cookieName } =
+      await this.operations.createAuthorization(options);
+    return { url, cookieName };
+  }
+
+  /** Pure variant of createSignIn — no cookie write. */
+  async getSignInUrl(
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ): Promise<{ url: string; cookieName: string }> {
+    return this.getAuthorizationUrl({ ...options, screenHint: 'sign-in' });
+  }
+
+  /** Pure variant of createSignUp — no cookie write. */
+  async getSignUpUrl(
+    options: Omit<GetAuthorizationUrlOptions, 'screenHint'> = {},
+  ): Promise<{ url: string; cookieName: string }> {
+    return this.getAuthorizationUrl({ ...options, screenHint: 'sign-up' });
+  }
+
+  /**
    * Emit a `Set-Cookie` header that clears the PKCE verifier cookie.
    *
    * Use on any exit path where a sign-in was started (verifier cookie
