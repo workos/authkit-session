@@ -5,6 +5,21 @@ import {
 } from '../core/errors.js';
 import { AuthService } from './AuthService.js';
 
+// Task 4 wrote the verifier cookie under the per-flow derived name, but
+// handleCallback still reads/clears under the legacy PKCE_COOKIE_NAME until
+// Task 5. This helper mirrors the cookie under the legacy name so the
+// existing handleCallback tests keep exercising their intended code paths.
+// When Task 5 derives the read name from URL state, this helper can be
+// removed.
+function mirrorToLegacyName(
+  store: { cookies: Map<string, string> },
+  cookieName: string,
+): string {
+  const value = store.cookies.get(cookieName)!;
+  store.cookies.set('wos-auth-verifier', value);
+  return value;
+}
+
 const mockConfig = {
   clientId: 'test-client-id',
   apiKey: 'test-api-key',
@@ -224,6 +239,55 @@ describe('AuthService', () => {
   });
 
   describe('createAuthorization()', () => {
+    it('returns url + cookieName and writes under the derived per-flow name', async () => {
+      const realStorage = makeStorage();
+      const authService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { url, cookieName, headers } = await authService.createSignIn(
+        undefined,
+        {
+          returnPathname: '/foo',
+        },
+      );
+      expect(url).toMatch(/^https:\/\//);
+      expect(cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
+
+      // Storage must have been called with the derived name, not the legacy name.
+      expect(realStorage.cookies.has('wos-auth-verifier')).toBe(false);
+      expect(realStorage.cookies.get(cookieName)).toBeTruthy();
+
+      // Set-Cookie header reflects the same name.
+      const setCookie = Array.isArray(headers?.['Set-Cookie'])
+        ? headers!['Set-Cookie'].join('\n')
+        : (headers?.['Set-Cookie'] ?? '');
+      expect(setCookie).toContain(`${cookieName}=`);
+    });
+
+    it('isolates concurrent flows: two sign-ins produce two distinct cookies', async () => {
+      const realStorage = makeStorage();
+      const authService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const a = await authService.createSignIn(undefined, {
+        returnPathname: '/a',
+      });
+      const b = await authService.createSignIn(undefined, {
+        returnPathname: '/b',
+      });
+      expect(a.cookieName).not.toBe(b.cookieName);
+      expect(realStorage.cookies.get(a.cookieName)).toBeTruthy();
+      expect(realStorage.cookies.get(b.cookieName)).toBeTruthy();
+    });
+
     it('returns url and writes the verifier cookie via storage.setCookie', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(
@@ -236,11 +300,9 @@ describe('AuthService', () => {
       const result = await realService.createAuthorization('res');
 
       expect(result.url).toContain('authorize');
-      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
-      expect(result.headers?.['Set-Cookie']).toContain('wos-auth-verifier=');
-      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.path).toBe(
-        '/',
-      );
+      expect(realStorage.cookies.get(result.cookieName)).toBeTruthy();
+      expect(result.headers?.['Set-Cookie']).toContain(`${result.cookieName}=`);
+      expect(realStorage.lastSetOptions.get(result.cookieName)?.path).toBe('/');
     });
   });
 
@@ -257,7 +319,7 @@ describe('AuthService', () => {
       const result = await realService.createSignIn('res');
 
       expect(result.url).toContain('screen_hint=sign-in');
-      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
+      expect(realStorage.cookies.get(result.cookieName)).toBeTruthy();
     });
   });
 
@@ -274,7 +336,7 @@ describe('AuthService', () => {
       const result = await realService.createSignUp('res');
 
       expect(result.url).toContain('screen_hint=sign-up');
-      expect(realStorage.cookies.get('wos-auth-verifier')).toBeTruthy();
+      expect(realStorage.cookies.get(result.cookieName)).toBeTruthy();
     });
   });
 
@@ -330,11 +392,11 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res', {
+      const { cookieName } = await realService.createAuthorization('res', {
         returnPathname: '/dashboard',
         state: 'my.custom.state',
       });
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'auth-code-xyz',
@@ -356,8 +418,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'code',
@@ -421,8 +483,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'code',
@@ -449,8 +511,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       await realService.handleCallback('req', 'res', {
         code: 'code',
@@ -471,9 +533,10 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
-      // Tamper the stored cookie after sign-in
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get(cookieName)!;
+      // Tamper the stored cookie under the legacy name that handleCallback
+      // still reads (handleCallback migrates to the derived name in Task 5).
       realStorage.cookies.set(
         'wos-auth-verifier',
         sealedState.slice(0, -2) + 'XX',
@@ -496,9 +559,11 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
-      realStorage.cookies.delete('wos-auth-verifier');
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get(cookieName)!;
+      // No mirror to legacy name — handleCallback's legacy-name read finds
+      // nothing, which is the scenario under test.
+      realStorage.cookies.delete(cookieName);
 
       await expect(
         realService.handleCallback('req', 'res', {
@@ -536,8 +601,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       const result = await realService.handleCallback('req', 'res', {
         code: 'c',
@@ -556,8 +621,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get(cookieName)!;
       realStorage.cookies.set(
         'wos-auth-verifier',
         sealedState.slice(0, -2) + 'XX',
@@ -589,15 +654,13 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res', {
+      const { cookieName } = await realService.createAuthorization('res', {
         redirectUri: 'http://localhost:3000/callback',
       });
       // Confirm the original set was secure=false (the scenario we're
       // proving we can still clean up).
-      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.secure).toBe(
-        false,
-      );
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      expect(realStorage.lastSetOptions.get(cookieName)?.secure).toBe(false);
+      const sealedState = realStorage.cookies.get(cookieName)!;
       realStorage.cookies.set(
         'wos-auth-verifier',
         sealedState.slice(0, -2) + 'XX',
@@ -625,8 +688,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get(cookieName)!;
       realStorage.cookies.set(
         'wos-auth-verifier',
         sealedState.slice(0, -2) + 'XX',
@@ -653,9 +716,13 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
-      realStorage.cookies.delete('wos-auth-verifier');
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = realStorage.cookies.get(cookieName)!;
+      // Delete the derived-name cookie; the legacy name was never written
+      // (Task 4 only writes under the derived name), so handleCallback's
+      // legacy-name read still returns null and triggers the missing-cookie
+      // path under test.
+      realStorage.cookies.delete(cookieName);
 
       await expect(
         realService.handleCallback('req', 'res', {
@@ -682,8 +749,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       await expect(
         realService.handleCallback('req', 'res', {
@@ -709,8 +776,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       await expect(
         realService.handleCallback('req', 'res', {
@@ -740,8 +807,8 @@ describe('AuthService', () => {
         sessionEncryption,
       );
 
-      await realService.createAuthorization('res');
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const { cookieName } = await realService.createAuthorization('res');
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
       await expect(
         realService.handleCallback('req', 'res', {
@@ -762,14 +829,12 @@ describe('AuthService', () => {
 
       // Override with an http:// URL so the `secure` attribute differs from
       // the https:// default — proves handleCallback used the override.
-      await realService.createAuthorization('res', {
+      const { cookieName } = await realService.createAuthorization('res', {
         redirectUri: 'http://localhost:3000/callback',
       });
-      const sealedState = realStorage.cookies.get('wos-auth-verifier')!;
+      const sealedState = mirrorToLegacyName(realStorage, cookieName);
 
-      expect(realStorage.lastSetOptions.get('wos-auth-verifier')?.secure).toBe(
-        false,
-      );
+      expect(realStorage.lastSetOptions.get(cookieName)?.secure).toBe(false);
 
       await realService.handleCallback('req', 'res', {
         code: 'code',

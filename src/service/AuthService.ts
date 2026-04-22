@@ -229,15 +229,15 @@ export class AuthService<TRequest, TResponse> {
     response: TResponse | undefined,
     options: GetAuthorizationUrlOptions = {},
   ): Promise<CreateAuthorizationResult<TResponse>> {
-    const { url, sealedState, cookieOptions } =
+    const { url, sealedState, cookieName, cookieOptions } =
       await this.operations.createAuthorization(options);
     const write = await this.storage.setCookie(
       response,
-      PKCE_COOKIE_NAME,
+      cookieName,
       sealedState,
       cookieOptions,
     );
-    return { url, ...write };
+    return { url, cookieName, ...write };
   }
 
   /**
