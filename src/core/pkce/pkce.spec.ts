@@ -89,6 +89,13 @@ describe('PKCE end-to-end round-trip', () => {
     ).rejects.toThrow(PKCECookieMissingError);
   });
 
+  it('returns cookieName derived from the sealed state', async () => {
+    const result = await generate();
+    const { getPKCECookieNameForState } = await import('./cookieName.js');
+    expect(result.cookieName).toBe(getPKCECookieNameForState(result.sealedState));
+    expect(result.cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
+  });
+
   it('concurrent sign-ins produce distinct sealedStates (cross-flow rejection)', async () => {
     const core = makeCore();
     const a = await generate();
