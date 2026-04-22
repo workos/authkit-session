@@ -19,7 +19,7 @@ This is the same bug `authkit-nextjs` fixed in PR [#403](https://github.com/work
 ## Goals
 
 1. Eliminate cross-flow clobbering by giving each concurrent PKCE flow its own cookie name.
-2. Keep the fix additive in `authkit-session`'s public API except for a single deliberate breaking change to `clearPendingVerifier` (called only inside our own adapters).
+2. Keep the fix additive in `authkit-session`'s public API except for a single deliberate breaking change to `clearPendingVerifier`. This IS a consumer-facing break — `clearPendingVerifier` is documented in the public README and MIGRATION guide as an API consumers call directly. The new required `state` parameter must be surfaced in both documents as part of this change.
 3. Avoid HTTP 431 cookie bloat in middleware-loop-prone adapter paths.
 
 ## Non-goals
@@ -124,9 +124,9 @@ clearPendingVerifier(
 )
 ```
 
-Rationale: a state-less cleanup is meaningless in the per-flow world — we'd have no cookie name to clear. Rather than silently no-op and hide bugs, force callers to pass `state`. The only callers today are in `authkit-sveltekit/src/server/auth.ts:113-125` and `authkit-tanstack-start/src/server/server.ts:73-88,144-176`, both in callback bailout paths where URL `state` is available.
+Rationale: a state-less cleanup is meaningless in the per-flow world — we'd have no cookie name to clear. Rather than silently no-op and hide bugs, force callers to pass `state`. In-tree callers (`authkit-sveltekit/src/server/auth.ts:113-125`, `authkit-tanstack-start/src/server/server.ts:73-88,144-176`) are both callback bailout paths where URL `state` is available.
 
-This is the one deliberate breaking change in the core. It's justified because the old signature encoded an invariant that no longer holds.
+This is a consumer-facing breaking change: `README.md:197,204,256` and `MIGRATION.md:27,148-162,239-240` document `clearPendingVerifier(response)` / `clearPendingVerifier(response, { redirectUri })` as a public API, so external adopters calling it in their own callback handlers will hit a TypeScript error on upgrade. The change is justified because the old signature encoded an invariant that no longer holds, but it must be called out in the migration guide.
 
 **Adapter rule for missing state.** URL `state` on a callback request can be absent in edge cases (e.g., a malformed request hitting the callback route directly). In that case adapters MUST NOT call `clearPendingVerifier` — there is no cookie to clear, and the 10-minute TTL handles any orphan. Each adapter's bailout path should guard: `if (state) await clearPendingVerifier(response, { state });`.
 
@@ -250,13 +250,15 @@ When `state` is absent (malformed callback), emit **no** static delete headers. 
 
 ## Release
 
+Current versions (as of this spec): `authkit-session@0.4.0`, `authkit-sveltekit@0.2.0`, `authkit-tanstack-react-start@0.6.0`.
+
 Order: `authkit-session` → `authkit-sveltekit` → `authkit-tanstack-start`.
 
-- `authkit-session` → `0.4.0`. The `clearPendingVerifier` signature change is a breaking change but scoped to in-tree callers; externally the surface grows (new methods, new return field). Minor bump with a CHANGELOG note covering the `clearPendingVerifier` signature.
-- `authkit-sveltekit` → patch or minor, depending on version semantics the package uses.
-- `authkit-tanstack-start` → patch or minor, same logic.
+- `authkit-session` → `0.5.0`. Minor bump (pre-1.0) covers the `clearPendingVerifier` signature break. Update `README.md` and `MIGRATION.md` in the same PR: document the new required `state` argument, add a "missing-state: skip the call" note, and mention the new `getAuthorizationUrl` / `getSignInUrl` / `getSignUpUrl` methods alongside existing surface.
+- `authkit-sveltekit` → `0.3.0`. Minor bump: breaking behavior change inside `createWithAuth` (now gates cookie writes on document-request detection), and adapter-internal call-site updates for `clearPendingVerifier(state)`.
+- `authkit-tanstack-react-start` → `0.7.0`. Minor bump: adapter-internal call-site updates for `clearPendingVerifier(state)` and replacement of `STATIC_FALLBACK_DELETE_HEADERS`.
 
-No user-facing migration required for consumers of the adapters — the fix is transparent to application code.
+Consumers of the adapters see no migration work — the fix is transparent to application code. Consumers of `authkit-session` directly (e.g., custom adapter authors) must update any `clearPendingVerifier(response)` call to pass `{ state }`.
 
 ## Rejected alternatives
 
