@@ -1,6 +1,7 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
 import {
   getPKCECookieOptions,
   PKCE_COOKIE_NAME,
@@ -321,7 +322,12 @@ export class AuthService<TRequest, TResponse> {
       state: string | undefined;
     },
   ) {
-    const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
+    const cookieName = options.state
+      ? getPKCECookieNameForState(options.state)
+      : null;
+    const cookieValue = cookieName
+      ? await this.storage.getCookie(request, cookieName)
+      : null;
 
     let unsealed;
     try {
@@ -337,7 +343,7 @@ export class AuthService<TRequest, TResponse> {
       // case so the Set-Cookie is accepted over http:// callbacks too.
       // The `sameSite: 'none'` case already forces Secure on both set and
       // clear, so there's no scheme-mismatch risk there.
-      await this.bestEffortClearVerifier(response, undefined, {
+      await this.bestEffortClearVerifier(response, cookieName, undefined, {
         schemeAgnostic: true,
       });
       throw err;
@@ -363,11 +369,15 @@ export class AuthService<TRequest, TResponse> {
 
       const encryptedSession = await this.core.encryptSession(session);
       const save = await this.storage.saveSession(response, encryptedSession);
-      const clear = await this.storage.clearCookie(
-        save.response ?? response,
-        PKCE_COOKIE_NAME,
-        clearOptions,
-      );
+
+      let clear: { response?: TResponse; headers?: HeadersBag } = {};
+      if (cookieName) {
+        clear = await this.storage.clearCookie(
+          save.response ?? response,
+          cookieName,
+          clearOptions,
+        );
+      }
 
       return {
         response: clear.response ?? save.response,
@@ -377,7 +387,7 @@ export class AuthService<TRequest, TResponse> {
         authResponse,
       };
     } catch (err) {
-      await this.bestEffortClearVerifier(response, redirectUri);
+      await this.bestEffortClearVerifier(response, cookieName, redirectUri);
       throw err;
     }
   }
@@ -397,15 +407,17 @@ export class AuthService<TRequest, TResponse> {
    */
   private async bestEffortClearVerifier(
     response: TResponse | undefined,
+    cookieName: string | null,
     redirectUri: string | undefined,
     { schemeAgnostic = false }: { schemeAgnostic?: boolean } = {},
   ): Promise<void> {
+    if (!cookieName) return; // nothing to clear — no state on the URL.
     const options = getPKCECookieOptions(this.config, redirectUri);
     if (schemeAgnostic && options.sameSite === 'lax') {
       options.secure = false;
     }
     try {
-      await this.storage.clearCookie(response, PKCE_COOKIE_NAME, options);
+      await this.storage.clearCookie(response, cookieName, options);
     } catch {
       // Swallow: cleanup is opportunistic; callers get the original error.
     }
