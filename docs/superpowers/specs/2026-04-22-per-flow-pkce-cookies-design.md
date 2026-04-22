@@ -13,7 +13,7 @@ This is the same bug `authkit-nextjs` fixed in PR [#403](https://github.com/work
 ### Evidence in code
 
 - `authkit-session/src/core/pkce/cookieOptions.ts:5` — `PKCE_COOKIE_NAME = 'wos-auth-verifier'` is a single constant.
-- `authkit-session/src/service/AuthService.ts:236,324,368` — `createAuthorization` writes, `handleCallback` reads and clears, all against that one name.
+- `authkit-session/src/service/AuthService.ts:234-239,324-325,366-369` — `createAuthorization` writes, `handleCallback` reads and clears, all against that one name.
 - No concurrency isolation exists in the core or either adapter.
 
 ## Goals
@@ -78,7 +78,7 @@ getSignUpUrl(options?):        Promise<{ url: string; cookieName: string }>
 
 No response argument, no `Set-Cookie`, no `storage` touched. Thin wrappers around `AuthOperations.createAuthorization` / `createSignIn` / `createSignUp`.
 
-Existing `createAuthorization` / `createSignIn` / `createSignUp` continue to write the cookie, using the derived per-flow name internally. `CreateAuthorizationResult` gains `cookieName: string` for callers that want to track the flow (e.g., to pass back to `clearPendingVerifier`).
+Existing `createAuthorization` / `createSignIn` / `createSignUp` continue to write the cookie, using the derived per-flow name internally. `CreateAuthorizationResult` gains `cookieName: string` for callers that want to assert on or log the name — it is **not** the shape `clearPendingVerifier` consumes (which takes `state`; see §1.5).
 
 No `writeCookie?: boolean` flag — rejected in favor of the cleaner URL-only methods.
 
@@ -124,9 +124,11 @@ clearPendingVerifier(
 )
 ```
 
-Rationale: a state-less cleanup is meaningless in the per-flow world — we'd have no cookie name to clear. Rather than silently no-op and hide bugs, force callers to pass `state`. The only callers today are in `authkit-sveltekit/src/server/auth.ts` and `authkit-tanstack-start/src/server/server.ts`, both in callback bailout paths where URL `state` is available.
+Rationale: a state-less cleanup is meaningless in the per-flow world — we'd have no cookie name to clear. Rather than silently no-op and hide bugs, force callers to pass `state`. The only callers today are in `authkit-sveltekit/src/server/auth.ts:113-125` and `authkit-tanstack-start/src/server/server.ts:73-88,144-176`, both in callback bailout paths where URL `state` is available.
 
 This is the one deliberate breaking change in the core. It's justified because the old signature encoded an invariant that no longer holds.
+
+**Adapter rule for missing state.** URL `state` on a callback request can be absent in edge cases (e.g., a malformed request hitting the callback route directly). In that case adapters MUST NOT call `clearPendingVerifier` — there is no cookie to clear, and the 10-minute TTL handles any orphan. Each adapter's bailout path should guard: `if (state) await clearPendingVerifier(response, { state });`.
 
 #### 1.6 Exports
 
@@ -189,7 +191,11 @@ These are explicit user-triggered helpers called once per sign-in click. No midd
 
 #### 2.4 `clearPendingVerifier` call sites
 
-Update `src/server/auth.ts` callback-bailout paths to pass `state` from the URL.
+`src/server/auth.ts:118` currently calls `authKitInstance.clearPendingVerifier(new Response())` with no options; update to pass `{ state }` from the URL, guarded by the adapter rule in §1.5 (skip the call entirely if `state` is absent). `state` is already in scope at that call site as `url.searchParams.get('state') || undefined`.
+
+#### 2.5 Test fixture update
+
+`src/tests/get-sign-in-url.test.ts:7-8,54-84` and `src/tests/handle-callback.test.ts:10,12` hardcode `PKCE_COOKIE_NAME = 'wos-auth-verifier'`. Replace those constants with `getPKCECookieNameForState(sealedState)` derivations to match the new on-wire cookie name.
 
 ### 3. `authkit-tanstack-start`
 
@@ -201,9 +207,20 @@ Always write the cookie. Per-flow names (from core) handle the concurrency corre
 
 #### 3.2 `clearPendingVerifier` call sites
 
-Update `src/server/server.ts` callback bailout paths to pass `state`.
+`src/server/server.ts:73-88` wraps `clearPendingVerifier` inside `buildVerifierDeleteHeaders` and calls it with an optional `{ redirectUri }` — update to also pass `state`, guarded by the adapter rule in §1.5. `state` is in scope at `server.ts:102` and needs to be threaded into `buildVerifierDeleteHeaders`.
 
-#### 3.3 Stale comment cleanup
+#### 3.3 `STATIC_FALLBACK_DELETE_HEADERS` replacement
+
+`src/server/server.ts:7-10` hardcodes two static `Set-Cookie` delete headers for `wos-auth-verifier` (no suffix). Under per-flow names, those static deletes target a cookie that isn't set anymore. They're used in two branches:
+
+- `buildVerifierDeleteHeaders` failure path (`server.ts:84,87`) — when `clearPendingVerifier` throws.
+- `errorResponse` when `getAuthkit()` itself fails before any authkit call (`server.ts:153`).
+
+Replace with a dynamic helper that derives the delete headers from `state` (when available). `getPKCECookieNameForState` is a pure function imported from `@workos/authkit-session`; it has no dependency on `getAuthkit()` and can safely run even when authkit setup has failed.
+
+When `state` is absent (malformed callback), emit **no** static delete headers. The 10-minute TTL handles orphans.
+
+#### 3.4 Stale comment cleanup
 
 `src/server/server.ts:62-71` still claims PKCE cookie `Path` tracks `redirectUri`. `authkit-session/src/core/pkce/cookieOptions.ts:57` hardcodes `path: '/'`. Fix the comments in the same PR that bumps the dep.
 
@@ -229,6 +246,7 @@ Update `src/server/server.ts` callback bailout paths to pass `state`.
 
 - Existing tests continue to pass with per-flow cookie names (cookie name assertions need updating to derive via `getPKCECookieNameForState`).
 - Callback-bailout sites correctly thread URL `state` into `clearPendingVerifier`.
+- Static-fallback delete: with `state` present, asserts emitted headers match `getPKCECookieNameForState(state)`; with `state` absent, asserts no `Set-Cookie` delete headers are emitted.
 
 ## Release
 
