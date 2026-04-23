@@ -101,7 +101,9 @@ describe('createAuthService', () => {
         clientFactory: () => customClient as any,
       });
 
-      const result = await service.getSignInUrl({ returnPathname: '/dashboard' });
+      const result = await service.getSignInUrl({
+        returnPathname: '/dashboard',
+      });
 
       expect(result.url).toBe('https://example.com/authorize');
       expect(result.cookieName).toMatch(/^wos-auth-verifier-/);

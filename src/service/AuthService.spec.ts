@@ -929,9 +929,7 @@ describe('AuthService', () => {
         const setCookies = Array.isArray(result.headers?.['Set-Cookie'])
           ? (result.headers!['Set-Cookie'] as string[])
           : ([result.headers?.['Set-Cookie']].filter(Boolean) as string[]);
-        const deleteLine = setCookies.find(c =>
-          c.startsWith(`${cookieName}=`),
-        );
+        const deleteLine = setCookies.find(c => c.startsWith(`${cookieName}=`));
         expect(deleteLine).toBeDefined();
         expect(deleteLine).toContain('Max-Age=0');
       });
@@ -962,12 +960,12 @@ describe('AuthService', () => {
           ? (result.headers!['Set-Cookie'] as string[])
           : ([result.headers?.['Set-Cookie']].filter(Boolean) as string[]);
         // Flow A's cookie gets a delete. Flow B's cookie must NOT.
-        expect(
-          setCookies.some(c => c.startsWith(`${a.cookieName}=`)),
-        ).toBe(true);
-        expect(
-          setCookies.some(c => c.startsWith(`${b.cookieName}=`)),
-        ).toBe(false);
+        expect(setCookies.some(c => c.startsWith(`${a.cookieName}=`))).toBe(
+          true,
+        );
+        expect(setCookies.some(c => c.startsWith(`${b.cookieName}=`))).toBe(
+          false,
+        );
       });
     });
   });

@@ -26,17 +26,23 @@ describe('fnv1a32Hex', () => {
   });
 
   it('is deterministic', () => {
-    expect(fnv1a32Hex('some-sealed-state')).toBe(fnv1a32Hex('some-sealed-state'));
+    expect(fnv1a32Hex('some-sealed-state')).toBe(
+      fnv1a32Hex('some-sealed-state'),
+    );
   });
 });
 
 describe('getPKCECookieNameForState', () => {
   it('prefixes with wos-auth-verifier and appends an 8-char hex hash', () => {
-    expect(getPKCECookieNameForState('any-state')).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
+    expect(getPKCECookieNameForState('any-state')).toMatch(
+      /^wos-auth-verifier-[0-9a-f]{8}$/,
+    );
   });
 
   it('produces different names for different states', () => {
-    expect(getPKCECookieNameForState('state-a')).not.toBe(getPKCECookieNameForState('state-b'));
+    expect(getPKCECookieNameForState('state-a')).not.toBe(
+      getPKCECookieNameForState('state-b'),
+    );
   });
 
   it('is deterministic for the same input', () => {
