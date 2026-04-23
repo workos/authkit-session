@@ -194,15 +194,10 @@ authService.signOut(sessionId, { returnTo })     // → { logoutUrl, response?, 
 authService.refreshSession(session, organizationId?)
 authService.switchOrganization(session, organizationId)
 
-// URL Generation — write verifier cookie, return { url, response?, headers? }
+// URL Generation — write verifier cookie, return { url, cookieName, response?, headers? }
 authService.createAuthorization(response, options)
 authService.createSignIn(response, options)
 authService.createSignUp(response, options)
-
-// URL Generation — pure, return { url, cookieName } WITHOUT writing a cookie
-authService.getAuthorizationUrl(options)
-authService.getSignInUrl(options)
-authService.getSignUpUrl(options)
 
 // Error-path cleanup for the PKCE verifier cookie
 // `state` is required (from the callback URL) — it identifies which per-flow
@@ -211,26 +206,6 @@ authService.getSignUpUrl(options)
 // (response may be `undefined` for headers-only adapters)
 authService.clearPendingVerifier(response, { state, redirectUri? })
 ```
-
-### Generating URLs without writing a cookie
-
-`getAuthorizationUrl`, `getSignInUrl`, and `getSignUpUrl` return
-`{ url, cookieName }` WITHOUT writing the PKCE verifier cookie. Use
-these in adapter code paths where the cookie write is wasted — for
-example, on non-document requests in a middleware hook. Browsers
-don't follow cross-origin redirects from fetch/XHR/RSC/prefetch, so
-a cookie write on those requests is noise.
-
-```ts
-const { url, cookieName } = await authService.getSignInUrl({
-  returnPathname: '/dashboard',
-});
-// No Set-Cookie emitted. Use createSignIn if you want the cookie written.
-```
-
-For regular user-initiated sign-in flows, keep using `createSignIn` /
-`createSignUp` / `createAuthorization` — they write the cookie and
-return it alongside the URL.
 
 ### PKCE verifier cookie (`wos-auth-verifier-<fnv1a>`)
 

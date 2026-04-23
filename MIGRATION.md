@@ -25,17 +25,6 @@ if (state) {
 Skip the call entirely when `state` is absent (malformed callback) —
 the 10-minute PKCE TTL cleans up orphan cookies.
 
-### New pure URL methods
-
-- `getAuthorizationUrl(options)` — returns `{ url, cookieName }`, writes no cookie.
-- `getSignInUrl(options)` — same with `screenHint: 'sign-in'`.
-- `getSignUpUrl(options)` — same with `screenHint: 'sign-up'`.
-
-Use these in adapter code paths where the cookie write is wasted
-(e.g. non-document requests in a SvelteKit `handle` hook). Browsers
-don't follow cross-origin redirects from fetch/XHR, so the cookie
-would never be used anyway.
-
 ---
 
 ## 0.3.x → 0.4.0

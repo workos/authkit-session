@@ -325,58 +325,6 @@ describe('AuthService', () => {
     });
   });
 
-  describe('AuthService — pure URL-generation methods', () => {
-    it('getAuthorizationUrl returns { url, cookieName } without touching storage', async () => {
-      const realStorage = makeStorage();
-      const authService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-      const setCookieSpy = vi.spyOn(realStorage, 'setCookie');
-      const result = await authService.getAuthorizationUrl({
-        returnPathname: '/foo',
-      });
-
-      expect(result.url).toMatch(/^https:\/\//);
-      expect(result.cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
-      expect(setCookieSpy).not.toHaveBeenCalled();
-      expect(result).not.toHaveProperty('response');
-      expect(result).not.toHaveProperty('headers');
-    });
-
-    it('getSignInUrl returns { url, cookieName } with sign-in screen hint', async () => {
-      const realStorage = makeStorage();
-      const authService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-      const setCookieSpy = vi.spyOn(realStorage, 'setCookie');
-      const result = await authService.getSignInUrl({ returnPathname: '/foo' });
-      expect(result.url).toContain('screen_hint=sign-in');
-      expect(result.cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
-      expect(setCookieSpy).not.toHaveBeenCalled();
-    });
-
-    it('getSignUpUrl returns { url, cookieName } with sign-up screen hint', async () => {
-      const realStorage = makeStorage();
-      const authService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-      const setCookieSpy = vi.spyOn(realStorage, 'setCookie');
-      const result = await authService.getSignUpUrl();
-      expect(result.url).toContain('screen_hint=sign-up');
-      expect(result.cookieName).toMatch(/^wos-auth-verifier-[0-9a-f]{8}$/);
-      expect(setCookieSpy).not.toHaveBeenCalled();
-    });
-  });
-
   describe('clearPendingVerifier()', () => {
     it('emits a delete cookie with Path=/', async () => {
       const realStorage = makeStorage();

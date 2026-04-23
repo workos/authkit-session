@@ -43,9 +43,6 @@ describe('createAuthService', () => {
       expect(typeof service.createAuthorization).toBe('function');
       expect(typeof service.createSignIn).toBe('function');
       expect(typeof service.createSignUp).toBe('function');
-      expect(typeof service.getAuthorizationUrl).toBe('function');
-      expect(typeof service.getSignInUrl).toBe('function');
-      expect(typeof service.getSignUpUrl).toBe('function');
       expect(typeof service.clearPendingVerifier).toBe('function');
       expect(typeof service.getWorkOS).toBe('function');
       expect(typeof service.handleCallback).toBe('function');
@@ -79,34 +76,6 @@ describe('createAuthService', () => {
 
       // Factory accepts the custom encryption - verify by checking the interface exists
       expect(typeof service.withAuth).toBe('function');
-    });
-
-    it('forwards pure URL helpers through the factory proxy', async () => {
-      const customClient = {
-        pkce: {
-          generate: async () => ({
-            codeVerifier: 'verifier',
-            codeChallenge: 'challenge',
-            codeChallengeMethod: 'S256',
-          }),
-        },
-        userManagement: {
-          getAuthorizationUrl: () => 'https://example.com/authorize',
-          getJwksUrl: () => 'https://custom.example.com/jwks',
-        },
-      };
-
-      const service = createAuthService({
-        sessionStorageFactory: () => mockStorage as any,
-        clientFactory: () => customClient as any,
-      });
-
-      const result = await service.getSignInUrl({
-        returnPathname: '/dashboard',
-      });
-
-      expect(result.url).toBe('https://example.com/authorize');
-      expect(result.cookieName).toMatch(/^wos-auth-verifier-/);
     });
   });
 
