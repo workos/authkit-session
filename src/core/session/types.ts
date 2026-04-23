@@ -176,13 +176,17 @@ export interface SessionEncryption {
  * The verifier cookie is written internally via `SessionStorage.setCookie` — callers
  * only need to redirect the browser to `url` and apply any returned `headers`/`response`.
  */
-export interface GetAuthorizationUrlResult {
+export type CreateAuthorizationResult<TResponse> = {
   url: string;
-}
-
-export type CreateAuthorizationResult<TResponse> = GetAuthorizationUrlResult & {
   response?: TResponse;
   headers?: HeadersBag;
+  /**
+   * Name of the PKCE verifier cookie written during this call. Useful
+   * for assertion-in-tests and for adapters that want to log the flow
+   * identifier. NOT the shape `clearPendingVerifier` consumes — that
+   * method takes `state`, not `cookieName`.
+   */
+  cookieName: string;
 };
 
 export interface CookieOptions {

@@ -1,10 +1,8 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
-import {
-  getPKCECookieOptions,
-  PKCE_COOKIE_NAME,
-} from '../core/pkce/cookieOptions.js';
+import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
+import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -229,15 +227,15 @@ export class AuthService<TRequest, TResponse> {
     response: TResponse | undefined,
     options: GetAuthorizationUrlOptions = {},
   ): Promise<CreateAuthorizationResult<TResponse>> {
-    const { url, sealedState, cookieOptions } =
+    const { url, sealedState, cookieName, cookieOptions } =
       await this.operations.createAuthorization(options);
     const write = await this.storage.setCookie(
       response,
-      PKCE_COOKIE_NAME,
+      cookieName,
       sealedState,
       cookieOptions,
     );
-    return { url, ...write };
+    return { url, cookieName, ...write };
   }
 
   /**
@@ -267,24 +265,28 @@ export class AuthService<TRequest, TResponse> {
   }
 
   /**
-   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie.
+   * Emit a `Set-Cookie` header that clears the PKCE verifier cookie
+   * for the flow identified by `state`.
    *
-   * Use on any exit path where a sign-in was started (verifier cookie
-   * written) but `handleCallback` will not run to clear it — OAuth error
-   * responses, missing `code`, early bail-outs.
+   * **Breaking change in 0.5.0.** The `state` option is now required
+   * — the per-flow cookie naming scheme has no single "legacy" name
+   * to clear. Callers typically read `state` from the callback URL;
+   * when `state` is absent (malformed callback), do not call this
+   * method. The 10-minute PKCE TTL cleans up orphans.
    *
    * Pass `options.redirectUri` on requests that used a per-request
-   * `redirectUri` override at sign-in time, so the delete cookie's computed
-   * attributes (notably `secure`) match what was originally set.
+   * `redirectUri` override at sign-in time, so the delete cookie's
+   * computed attributes (notably `secure`) match the original set.
    */
   async clearPendingVerifier(
     response: TResponse | undefined,
-    options?: Pick<GetAuthorizationUrlOptions, 'redirectUri'>,
+    options: { state: string; redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    const cookieName = getPKCECookieNameForState(options.state);
     return this.storage.clearCookie(
       response,
-      PKCE_COOKIE_NAME,
-      getPKCECookieOptions(this.config, options?.redirectUri),
+      cookieName,
+      getPKCECookieOptions(this.config, options.redirectUri),
     );
   }
 
@@ -321,7 +323,12 @@ export class AuthService<TRequest, TResponse> {
       state: string | undefined;
     },
   ) {
-    const cookieValue = await this.storage.getCookie(request, PKCE_COOKIE_NAME);
+    const cookieName = options.state
+      ? getPKCECookieNameForState(options.state)
+      : null;
+    const cookieValue = cookieName
+      ? await this.storage.getCookie(request, cookieName)
+      : null;
 
     let unsealed;
     try {
@@ -337,7 +344,7 @@ export class AuthService<TRequest, TResponse> {
       // case so the Set-Cookie is accepted over http:// callbacks too.
       // The `sameSite: 'none'` case already forces Secure on both set and
       // clear, so there's no scheme-mismatch risk there.
-      await this.bestEffortClearVerifier(response, undefined, {
+      await this.bestEffortClearVerifier(response, cookieName, undefined, {
         schemeAgnostic: true,
       });
       throw err;
@@ -363,11 +370,15 @@ export class AuthService<TRequest, TResponse> {
 
       const encryptedSession = await this.core.encryptSession(session);
       const save = await this.storage.saveSession(response, encryptedSession);
-      const clear = await this.storage.clearCookie(
-        save.response ?? response,
-        PKCE_COOKIE_NAME,
-        clearOptions,
-      );
+
+      let clear: { response?: TResponse; headers?: HeadersBag } = {};
+      if (cookieName) {
+        clear = await this.storage.clearCookie(
+          save.response ?? response,
+          cookieName,
+          clearOptions,
+        );
+      }
 
       return {
         response: clear.response ?? save.response,
@@ -377,7 +388,7 @@ export class AuthService<TRequest, TResponse> {
         authResponse,
       };
     } catch (err) {
-      await this.bestEffortClearVerifier(response, redirectUri);
+      await this.bestEffortClearVerifier(response, cookieName, redirectUri);
       throw err;
     }
   }
@@ -397,15 +408,17 @@ export class AuthService<TRequest, TResponse> {
    */
   private async bestEffortClearVerifier(
     response: TResponse | undefined,
+    cookieName: string | null,
     redirectUri: string | undefined,
     { schemeAgnostic = false }: { schemeAgnostic?: boolean } = {},
   ): Promise<void> {
+    if (!cookieName) return; // nothing to clear — no state on the URL.
     const options = getPKCECookieOptions(this.config, redirectUri);
     if (schemeAgnostic && options.sameSite === 'lax') {
       options.secure = false;
     }
     try {
-      await this.storage.clearCookie(response, PKCE_COOKIE_NAME, options);
+      await this.storage.clearCookie(response, cookieName, options);
     } catch {
       // Swallow: cleanup is opportunistic; callers get the original error.
     }

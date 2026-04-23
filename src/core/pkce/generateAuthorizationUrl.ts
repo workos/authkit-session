@@ -7,7 +7,8 @@ import type {
   GetAuthorizationUrlOptions,
   SessionEncryption,
 } from '../session/types.js';
-import { getPKCECookieOptions, PKCE_COOKIE_NAME } from './cookieOptions.js';
+import { getPKCECookieNameForState } from './cookieName.js';
+import { getPKCECookieOptions } from './cookieOptions.js';
 import { sealState } from './state.js';
 
 /**
@@ -37,6 +38,7 @@ export const PKCE_MAX_COOKIE_BYTES = 3800;
 export interface GeneratedAuthorizationUrl {
   url: string;
   sealedState: string;
+  cookieName: string;
   cookieOptions: CookieOptions;
 }
 
@@ -89,11 +91,8 @@ export async function generateAuthorizationUrl(params: {
   // returnPathname combined with near-max state, or an unusually long
   // cookieDomain attribute.
   const cookieOptions = getPKCECookieOptions(config, redirectUri);
-  const serialized = serializeCookie(
-    PKCE_COOKIE_NAME,
-    sealedState,
-    cookieOptions,
-  );
+  const cookieName = getPKCECookieNameForState(sealedState);
+  const serialized = serializeCookie(cookieName, sealedState, cookieOptions);
   const cookieBytes = new TextEncoder().encode(serialized).byteLength;
   if (cookieBytes > PKCE_MAX_COOKIE_BYTES) {
     throw new PKCEPayloadTooLargeError(
@@ -118,6 +117,7 @@ export async function generateAuthorizationUrl(params: {
   return {
     url,
     sealedState,
+    cookieName,
     cookieOptions,
   };
 }

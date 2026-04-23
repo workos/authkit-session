@@ -1,9 +1,6 @@
 import type { AuthKitConfig } from '../config/types.js';
 import type { CookieOptions } from '../session/types.js';
 
-/** Name of the PKCE verifier cookie on the wire. */
-export const PKCE_COOKIE_NAME = 'wos-auth-verifier';
-
 /**
  * PKCE verifier cookie lifetime (seconds). Matches the 10-minute convention
  * used by Arctic, openid-client, Clerk, and Okta for short-lived OAuth state

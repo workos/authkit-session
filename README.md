@@ -194,25 +194,32 @@ authService.signOut(sessionId, { returnTo })     // → { logoutUrl, response?, 
 authService.refreshSession(session, organizationId?)
 authService.switchOrganization(session, organizationId)
 
-// URL Generation — write verifier cookie, return { url, response?, headers? }
+// URL Generation — write verifier cookie, return { url, cookieName, response?, headers? }
 authService.createAuthorization(response, options)
 authService.createSignIn(response, options)
 authService.createSignUp(response, options)
 
 // Error-path cleanup for the PKCE verifier cookie
+// `state` is required (from the callback URL) — it identifies which per-flow
+// verifier cookie to clear. Skip this call when `state` is absent from the
+// callback URL (malformed callback); the 10-minute PKCE TTL handles the orphan.
 // (response may be `undefined` for headers-only adapters)
-authService.clearPendingVerifier(response, { redirectUri? })
+authService.clearPendingVerifier(response, { state, redirectUri? })
 ```
 
-### PKCE verifier cookie (`wos-auth-verifier`)
+### PKCE verifier cookie (`wos-auth-verifier-<fnv1a>`)
 
 This library binds every OAuth sign-in to a PKCE code verifier, so a leaked
 `state` value on its own cannot be used to complete a session hijack.
 
+Each in-flight sign-in gets its own per-flow verifier cookie with a
+deterministic suffix derived from the sealed blob, so concurrent
+sign-ins from multiple tabs no longer clobber each other.
+
 The verifier is sealed into a single blob that serves two roles:
 
 1. It is sent to WorkOS as the OAuth `state` query parameter.
-2. It is set as a short-lived HTTP-only cookie (`wos-auth-verifier`, 10 min).
+2. It is set as a short-lived HTTP-only cookie (`wos-auth-verifier-<fnv1a>`, 10 min).
 
 The cookie is written and read through `SessionStorage`. Callers don't see
 sealed blobs or cookie options:
@@ -253,8 +260,18 @@ if (setCookie) {
 Mismatched state and cookie raise `OAuthStateMismatchError`. A missing cookie
 (typical cause: Set-Cookie stripped by a proxy) raises
 `PKCECookieMissingError`. On either error path — or any early bail-out before
-`handleCallback` runs — call `authService.clearPendingVerifier(response)` to
-emit a delete header.
+`handleCallback` runs — call
+`authService.clearPendingVerifier(response, { state })` with the `state` from
+the callback URL to emit a delete header for the correct per-flow cookie:
+
+```ts
+if (state) {
+  await authService.clearPendingVerifier(response, { state });
+}
+```
+
+If the callback URL has no `state` (malformed callback), skip this call — the
+10-minute PKCE TTL handles the orphan.
 
 ### Direct Access (Advanced)
 
