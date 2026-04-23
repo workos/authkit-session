@@ -25,6 +25,11 @@ if (state) {
 Skip the call entirely when `state` is absent (malformed callback) —
 the 10-minute PKCE TTL cleans up orphan cookies.
 
+### Removed exports
+
+- `PKCE_COOKIE_NAME` is gone. The wire cookie is now per-flow (`wos-auth-verifier-<fnv1a>`), so a single static name no longer identifies anything. Use `PKCE_COOKIE_PREFIX` if you need the stable prefix, or `getPKCECookieNameForState(state)` to derive the per-flow name.
+- `GetAuthorizationUrlResult` type is gone. The fields are inlined into `CreateAuthorizationResult`, which is what `createAuthorization` / `createSignIn` / `createSignUp` return.
+
 ---
 
 ## 0.3.x → 0.4.0

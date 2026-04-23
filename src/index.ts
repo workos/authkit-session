@@ -44,8 +44,6 @@ export {
   PKCE_COOKIE_PREFIX,
   getPKCECookieNameForState,
 } from './core/pkce/cookieName.js';
-// Back-compat alias. Prefer PKCE_COOKIE_PREFIX or the derived names via getPKCECookieNameForState.
-export { PKCE_COOKIE_NAME } from './core/pkce/cookieOptions.js';
 
 // ============================================
 // Encryption Fallback

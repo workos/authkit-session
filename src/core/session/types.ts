@@ -176,11 +176,8 @@ export interface SessionEncryption {
  * The verifier cookie is written internally via `SessionStorage.setCookie` — callers
  * only need to redirect the browser to `url` and apply any returned `headers`/`response`.
  */
-export interface GetAuthorizationUrlResult {
+export type CreateAuthorizationResult<TResponse> = {
   url: string;
-}
-
-export type CreateAuthorizationResult<TResponse> = GetAuthorizationUrlResult & {
   response?: TResponse;
   headers?: HeadersBag;
   /**
