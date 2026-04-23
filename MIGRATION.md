@@ -9,10 +9,10 @@ tabs no longer clobber each other. `clearPendingVerifier` now
 
 ### What consumers need to change
 
-| Before                                                   | After                                                             |
-| -------------------------------------------------------- | ----------------------------------------------------------------- |
-| `auth.clearPendingVerifier(response)`                    | `auth.clearPendingVerifier(response, { state })`                  |
-| `auth.clearPendingVerifier(response, { redirectUri })`   | `auth.clearPendingVerifier(response, { state, redirectUri })`     |
+| Before                                                 | After                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| `auth.clearPendingVerifier(response)`                  | `auth.clearPendingVerifier(response, { state })`              |
+| `auth.clearPendingVerifier(response, { redirectUri })` | `auth.clearPendingVerifier(response, { state, redirectUri })` |
 
 Guard the call on `state` presence:
 
