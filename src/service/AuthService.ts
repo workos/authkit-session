@@ -14,6 +14,7 @@ import type {
   SessionEncryption,
   SessionStorage,
 } from '../core/session/types.js';
+import { sanitizeReturnPathname } from '../utils.js';
 
 /**
  * Merge two `HeadersBag` values. `Set-Cookie` matching is case-insensitive;
@@ -383,7 +384,7 @@ export class AuthService<TRequest, TResponse> {
       return {
         response: clear.response ?? save.response,
         headers: mergeHeaderBags(save.headers, clear.headers),
-        returnPathname: returnPathname ?? '/',
+        returnPathname: sanitizeReturnPathname(returnPathname),
         state: customState,
         authResponse,
       };
