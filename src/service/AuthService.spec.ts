@@ -642,6 +642,39 @@ describe('AuthService', () => {
       expect(result.returnPathname).toBe('/');
     });
 
+    it.each([
+      ['absolute URL', 'https://evil.com/steal'],
+      ['protocol-relative', '//evil.com/steal'],
+      ['backslash smuggle', '/\\evil.com'],
+      ['javascript: scheme', 'javascript:alert(1)'],
+    ])(
+      'sanitizes a hostile returnPathname end-to-end: %s',
+      async (_label, hostilePathname) => {
+        const realStorage = makeStorage();
+        const realService = new AuthService(
+          mockConfig as any,
+          realStorage as any,
+          makeClient() as any,
+          sessionEncryption,
+        );
+
+        const { cookieName } = await realService.createAuthorization('res', {
+          returnPathname: hostilePathname,
+          state: 'custom-state',
+        });
+        const sealedState = realStorage.cookies.get(cookieName)!;
+
+        const result = await realService.handleCallback('req', 'res', {
+          code: 'code',
+          state: sealedState,
+        });
+
+        expect(result.returnPathname.startsWith('/')).toBe(true);
+        const trusted = 'https://trusted.example.com';
+        expect(new URL(result.returnPathname, trusted).origin).toBe(trusted);
+      },
+    );
+
     it('best-effort clears the verifier cookie on OAuthStateMismatchError', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(
