@@ -205,6 +205,45 @@ describe('AuthKitCore', () => {
         SessionEncryptionError,
       );
     });
+
+    it.each([
+      ['string', 'hello'],
+      ['number', 42],
+      ['null', null],
+      ['array', [1, 2, 3]],
+      ['empty object', {}],
+      ['missing user', { accessToken: 'at', refreshToken: 'rt' }],
+      ['null user', { accessToken: 'at', refreshToken: 'rt', user: null }],
+      [
+        'missing refreshToken',
+        { accessToken: 'at', user: { id: 'user_123' } },
+      ],
+    ])(
+      'throws SessionEncryptionError for invalid shape: %s',
+      async (_label, badValue) => {
+        const badEncryption = {
+          sealData: async () => 'encrypted',
+          unsealData: async () => badValue,
+        };
+        const badCore = new AuthKitCore(
+          mockConfig as any,
+          mockClient as any,
+          badEncryption as any,
+        );
+
+        await expect(badCore.decryptSession('data')).rejects.toThrow(
+          SessionEncryptionError,
+        );
+      },
+    );
+
+    it('accepts valid session shape', async () => {
+      const result = await core.decryptSession('encrypted-data');
+
+      expect(result.accessToken).toBe('test-access-token');
+      expect(result.refreshToken).toBe('test-refresh-token');
+      expect(result.user).toEqual(mockUser);
+    });
   });
 
   describe('refreshTokens()', () => {

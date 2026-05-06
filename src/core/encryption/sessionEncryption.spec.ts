@@ -11,14 +11,59 @@ const testData = {
 describe('SessionEncryptionAdapter', () => {
   const iron = new IronEncryption();
 
-  describe('unsealed mode (default)', () => {
+  describe('sealed mode (default)', () => {
     const adapter = new SessionEncryptionAdapter(iron);
 
-    it('writes plain JSON', async () => {
+    it('writes iron-sealed data by default', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+      });
+      expect(result).toMatch(/^Fe26\.2\*/);
+    });
+
+    it('reads iron-sealed data', async () => {
+      const sealed = await adapter.sealData(testData, {
+        password: testPassword,
+      });
+      const result = await adapter.unsealData(sealed, {
+        password: testPassword,
+      });
+      expect(result).toEqual(testData);
+    });
+
+    it('reads plain JSON (forward-compat with unsealed mode)', async () => {
+      const json = JSON.stringify(testData);
+      const result = await adapter.unsealData(json, {
+        password: testPassword,
+      });
+      expect(result).toEqual(testData);
+    });
+  });
+
+  describe('unsealed mode', () => {
+    const adapter = new SessionEncryptionAdapter(iron, { mode: 'unsealed' });
+
+    it('writes plain JSON for session cookies (ttl=0)', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+        ttl: 0,
+      });
+      expect(JSON.parse(result)).toEqual(testData);
+    });
+
+    it('writes plain JSON when ttl omitted', async () => {
       const result = await adapter.sealData(testData, {
         password: testPassword,
       });
       expect(JSON.parse(result)).toEqual(testData);
+    });
+
+    it('always seals when ttl > 0 (PKCE protection)', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+        ttl: 600,
+      });
+      expect(result).toMatch(/^Fe26\.2\*/);
     });
 
     it('reads plain JSON', async () => {
@@ -50,39 +95,13 @@ describe('SessionEncryptionAdapter', () => {
     });
   });
 
-  describe('sealed mode', () => {
-    const adapter = new SessionEncryptionAdapter(iron, true);
-
-    it('writes iron-sealed data', async () => {
-      const result = await adapter.sealData(testData, {
-        password: testPassword,
-      });
-      expect(result).toMatch(/^Fe26\.2\*/);
-      expect(result).toMatch(/~2$/);
-    });
-
-    it('reads iron-sealed data', async () => {
-      const sealed = await adapter.sealData(testData, {
-        password: testPassword,
-      });
-      const result = await adapter.unsealData(sealed, {
-        password: testPassword,
-      });
-      expect(result).toEqual(testData);
-    });
-
-    it('reads plain JSON (migrating back from unsealed)', async () => {
-      const json = JSON.stringify(testData);
-      const result = await adapter.unsealData(json, {
-        password: testPassword,
-      });
-      expect(result).toEqual(testData);
-    });
-  });
-
   describe('bidirectional migration', () => {
-    const unsealedAdapter = new SessionEncryptionAdapter(iron, false);
-    const sealedAdapter = new SessionEncryptionAdapter(iron, true);
+    const unsealedAdapter = new SessionEncryptionAdapter(iron, {
+      mode: 'unsealed',
+    });
+    const sealedAdapter = new SessionEncryptionAdapter(iron, {
+      mode: 'sealed',
+    });
 
     it('sealed adapter reads what unsealed adapter writes', async () => {
       const encoded = await unsealedAdapter.sealData(testData, {
@@ -119,7 +138,48 @@ describe('SessionEncryptionAdapter', () => {
     });
   });
 
-  describe('TTL passthrough', () => {
+  describe('PKCE TTL guard', () => {
+    const adapter = new SessionEncryptionAdapter(iron, { mode: 'unsealed' });
+
+    it('seals when ttl is positive', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+        ttl: 1,
+      });
+      expect(result).toMatch(/^Fe26\.2\*/);
+    });
+
+    it('does not seal when ttl is 0', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+        ttl: 0,
+      });
+      expect(result).not.toMatch(/^Fe26\./);
+      expect(JSON.parse(result)).toEqual(testData);
+    });
+
+    it('does not seal when ttl is undefined', async () => {
+      const result = await adapter.sealData(testData, {
+        password: testPassword,
+      });
+      expect(result).not.toMatch(/^Fe26\./);
+      expect(JSON.parse(result)).toEqual(testData);
+    });
+
+    it('round-trips PKCE sealed data in unsealed mode', async () => {
+      const sealed = await adapter.sealData(testData, {
+        password: testPassword,
+        ttl: 600,
+      });
+      const decoded = await adapter.unsealData(sealed, {
+        password: testPassword,
+        ttl: 600,
+      });
+      expect(decoded).toEqual(testData);
+    });
+  });
+
+  describe('TTL enforcement', () => {
     beforeEach(() => {
       vi.useFakeTimers();
     });
@@ -129,7 +189,7 @@ describe('SessionEncryptionAdapter', () => {
     });
 
     it('sealed mode respects TTL on unseal', async () => {
-      const adapter = new SessionEncryptionAdapter(iron, true);
+      const adapter = new SessionEncryptionAdapter(iron, { mode: 'sealed' });
       vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
 
       const sealed = await adapter.sealData(testData, {
@@ -143,28 +203,38 @@ describe('SessionEncryptionAdapter', () => {
       ).rejects.toThrow();
     });
 
-    it('unsealed mode ignores TTL (cookie maxAge handles expiry)', async () => {
-      const adapter = new SessionEncryptionAdapter(iron, false);
+    it('PKCE ttl > 0 is iron-sealed even in unsealed mode, so TTL is enforced', async () => {
+      const adapter = new SessionEncryptionAdapter(iron, { mode: 'unsealed' });
       vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
 
-      const encoded = await adapter.sealData(testData, {
+      const sealed = await adapter.sealData(testData, {
         password: testPassword,
         ttl: 1,
       });
 
-      vi.setSystemTime(new Date('2027-01-01T00:00:00.000Z'));
-      const decoded = await adapter.unsealData(encoded, {
-        password: testPassword,
-        ttl: 1,
-      });
-      expect(decoded).toEqual(testData);
+      vi.setSystemTime(new Date('2026-01-01T00:02:00.000Z'));
+      await expect(
+        adapter.unsealData(sealed, { password: testPassword, ttl: 1 }),
+      ).rejects.toThrow();
     });
   });
 
   describe('error handling', () => {
     const adapter = new SessionEncryptionAdapter(iron);
 
-    it('throws on malformed JSON', async () => {
+    it('throws on empty string', async () => {
+      await expect(
+        adapter.unsealData('', { password: testPassword }),
+      ).rejects.toThrow();
+    });
+
+    it('throws on whitespace-only string', async () => {
+      await expect(
+        adapter.unsealData('   ', { password: testPassword }),
+      ).rejects.toThrow();
+    });
+
+    it('throws on malformed JSON that does not start with Fe26.', async () => {
       await expect(
         adapter.unsealData('not-json-and-not-iron', {
           password: testPassword,
@@ -181,6 +251,23 @@ describe('SessionEncryptionAdapter', () => {
           password: 'wrong-password-that-is-32-chars!!',
         }),
       ).rejects.toThrow();
+    });
+
+    it('throws on fake Fe26. prefix (invalid iron token)', async () => {
+      await expect(
+        adapter.unsealData('Fe26.2*garbage*data', {
+          password: testPassword,
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('prefix collision safety', () => {
+    it('JSON.stringify of objects never starts with Fe26.', () => {
+      expect(JSON.stringify(testData).startsWith('Fe26.')).toBe(false);
+      expect(JSON.stringify({}).startsWith('Fe26.')).toBe(false);
+      expect(JSON.stringify([]).startsWith('Fe26.')).toBe(false);
+      expect(JSON.stringify('Fe26.fake').startsWith('Fe26.')).toBe(false);
     });
   });
 });
