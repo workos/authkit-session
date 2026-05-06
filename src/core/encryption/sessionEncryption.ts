@@ -34,7 +34,7 @@ export class SessionEncryptionAdapter implements SessionEncryption {
     options: SessionEncryptionAdapterOptions = {},
   ) {
     this.ironEncryption = ironEncryption;
-    this.mode = options.mode ?? 'sealed';
+    this.mode = options.mode ?? 'unsealed';
   }
 
   async sealData(

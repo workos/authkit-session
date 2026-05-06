@@ -11,29 +11,29 @@ const testData = {
 describe('SessionEncryptionAdapter', () => {
   const iron = new IronEncryption();
 
-  describe('sealed mode (default)', () => {
+  describe('unsealed mode (default)', () => {
     const adapter = new SessionEncryptionAdapter(iron);
 
-    it('writes iron-sealed data by default', async () => {
+    it('writes plain JSON by default', async () => {
       const result = await adapter.sealData(testData, {
         password: testPassword,
       });
-      expect(result).toMatch(/^Fe26\.2\*/);
+      expect(JSON.parse(result)).toEqual(testData);
     });
 
-    it('reads iron-sealed data', async () => {
-      const sealed = await adapter.sealData(testData, {
-        password: testPassword,
-      });
-      const result = await adapter.unsealData(sealed, {
+    it('reads plain JSON', async () => {
+      const json = JSON.stringify(testData);
+      const result = await adapter.unsealData(json, {
         password: testPassword,
       });
       expect(result).toEqual(testData);
     });
 
-    it('reads plain JSON (forward-compat with unsealed mode)', async () => {
-      const json = JSON.stringify(testData);
-      const result = await adapter.unsealData(json, {
+    it('reads legacy iron-sealed data', async () => {
+      const sealed = await iron.sealData(testData, {
+        password: testPassword,
+      });
+      const result = await adapter.unsealData(sealed, {
         password: testPassword,
       });
       expect(result).toEqual(testData);
