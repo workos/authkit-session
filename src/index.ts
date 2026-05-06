@@ -46,9 +46,10 @@ export {
 } from './core/pkce/cookieName.js';
 
 // ============================================
-// Encryption Fallback
+// Encryption
 // ============================================
 export { default as sessionEncryption } from './core/encryption/ironWebcryptoEncryption.js';
+export { SessionEncryptionAdapter } from './core/encryption/sessionEncryption.js';
 
 // ============================================
 // Configuration
