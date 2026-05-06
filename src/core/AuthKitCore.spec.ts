@@ -214,10 +214,7 @@ describe('AuthKitCore', () => {
       ['empty object', {}],
       ['missing user', { accessToken: 'at', refreshToken: 'rt' }],
       ['null user', { accessToken: 'at', refreshToken: 'rt', user: null }],
-      [
-        'missing refreshToken',
-        { accessToken: 'at', user: { id: 'user_123' } },
-      ],
+      ['missing refreshToken', { accessToken: 'at', user: { id: 'user_123' } }],
     ])(
       'throws SessionEncryptionError for invalid shape: %s',
       async (_label, badValue) => {
