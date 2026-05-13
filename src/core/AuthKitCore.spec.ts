@@ -56,10 +56,7 @@ function makeExpiredSession() {
   };
 }
 
-function makeCountingClient(opts?: {
-  delayMs?: number;
-  fail?: () => boolean;
-}) {
+function makeCountingClient(opts?: { delayMs?: number; fail?: () => boolean }) {
   let callCount = 0;
   const { delayMs = 50, fail } = opts ?? {};
   const client = {
@@ -67,7 +64,7 @@ function makeCountingClient(opts?: {
       getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
       authenticateWithRefreshToken: async () => {
         callCount++;
-        await new Promise((r) => setTimeout(r, delayMs));
+        await new Promise(r => setTimeout(r, delayMs));
         if (fail?.()) throw new Error('Refresh failed');
         return {
           accessToken: newJwt,

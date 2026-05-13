@@ -224,7 +224,9 @@ export class AuthKitCore {
     const existing = this.inflightRefreshes.get(key);
     if (existing) return existing;
 
-    const cleanup = () => { this.inflightRefreshes.delete(key); };
+    const cleanup = () => {
+      this.inflightRefreshes.delete(key);
+    };
     const promise = (async () => {
       try {
         const result =
