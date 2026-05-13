@@ -16,6 +16,13 @@ import type {
   SessionEncryption,
 } from './session/types.js';
 
+type RefreshResult = {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+  impersonator: Impersonator | undefined;
+};
+
 /**
  * AuthKitCore provides pure business logic for authentication operations.
  *
@@ -34,15 +41,7 @@ export class AuthKitCore {
   private client: WorkOS;
   private encryption: SessionEncryption;
   private clientId: string;
-  private inflightRefreshes = new Map<
-    string,
-    Promise<{
-      accessToken: string;
-      refreshToken: string;
-      user: User;
-      impersonator: Impersonator | undefined;
-    }>
-  >();
+  private inflightRefreshes = new Map<string, Promise<RefreshResult>>();
 
   constructor(
     config: AuthKitConfig,
@@ -220,12 +219,7 @@ export class AuthKitCore {
     refreshToken: string,
     organizationId?: string,
     context?: { userId?: string; sessionId?: string },
-  ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: User;
-    impersonator: Impersonator | undefined;
-  }> {
+  ): Promise<RefreshResult> {
     const key = `${refreshToken}:${organizationId ?? ''}`;
     const existing = this.inflightRefreshes.get(key);
     if (existing) return existing;

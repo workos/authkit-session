@@ -44,6 +44,43 @@ const mockEncryption = {
   }),
 };
 
+const newJwt =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
+
+function makeExpiredSession() {
+  return {
+    accessToken: 'expired-jwt',
+    refreshToken: 'rt-1',
+    user: mockUser,
+    impersonator: undefined,
+  };
+}
+
+function makeCountingClient(opts?: {
+  delayMs?: number;
+  fail?: () => boolean;
+}) {
+  let callCount = 0;
+  const { delayMs = 50, fail } = opts ?? {};
+  const client = {
+    userManagement: {
+      getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+      authenticateWithRefreshToken: async () => {
+        callCount++;
+        await new Promise((r) => setTimeout(r, delayMs));
+        if (fail?.()) throw new Error('Refresh failed');
+        return {
+          accessToken: newJwt,
+          refreshToken: 'new-rt',
+          user: mockUser,
+          impersonator: undefined,
+        };
+      },
+    },
+  };
+  return { client, getCallCount: () => callCount };
+}
+
 describe('AuthKitCore', () => {
   let core: AuthKitCore;
 
@@ -260,44 +297,21 @@ describe('AuthKitCore', () => {
     });
 
     it('deduplicates concurrent calls with the same refresh token', async () => {
-      const newJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
-      let callCount = 0;
-      const delayedClient = {
-        userManagement: {
-          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
-          authenticateWithRefreshToken: async () => {
-            callCount++;
-            await new Promise((r) => setTimeout(r, 50));
-            return {
-              accessToken: newJwt,
-              refreshToken: 'new-rt',
-              user: mockUser,
-              impersonator: undefined,
-            };
-          },
-        },
-      };
+      const { client, getCallCount } = makeCountingClient();
       const testCore = new AuthKitCore(
         mockConfig as any,
-        delayedClient as any,
+        client as any,
         mockEncryption as any,
       );
 
-      const session = {
-        accessToken: 'expired-jwt',
-        refreshToken: 'rt-1',
-        user: mockUser,
-        impersonator: undefined,
-      };
-
+      const session = makeExpiredSession();
       const results = await Promise.all([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
 
-      expect(callCount).toBe(1);
+      expect(getCallCount()).toBe(1);
       for (const r of results) {
         expect(r.refreshed).toBe(true);
         expect(r.session.accessToken).toBe(newJwt);
@@ -305,37 +319,23 @@ describe('AuthKitCore', () => {
     });
 
     it('propagates errors to all concurrent waiters', async () => {
-      let callCount = 0;
-      const failingClient = {
-        userManagement: {
-          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
-          authenticateWithRefreshToken: async () => {
-            callCount++;
-            await new Promise((r) => setTimeout(r, 50));
-            throw new Error('Rate limit exceeded');
-          },
-        },
-      };
+      const { client, getCallCount } = makeCountingClient({
+        fail: () => true,
+      });
       const testCore = new AuthKitCore(
         mockConfig as any,
-        failingClient as any,
+        client as any,
         mockEncryption as any,
       );
 
-      const session = {
-        accessToken: 'expired-jwt',
-        refreshToken: 'rt-1',
-        user: mockUser,
-        impersonator: undefined,
-      };
-
+      const session = makeExpiredSession();
       const results = await Promise.allSettled([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
 
-      expect(callCount).toBe(1);
+      expect(getCallCount()).toBe(1);
       for (const r of results) {
         expect(r.status).toBe('rejected');
         if (r.status === 'rejected') {
@@ -345,101 +345,53 @@ describe('AuthKitCore', () => {
     });
 
     it('retries after a failed concurrent batch', async () => {
-      const newJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
-      let callCount = 0;
       let shouldFail = true;
-      const retryClient = {
-        userManagement: {
-          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
-          authenticateWithRefreshToken: async () => {
-            callCount++;
-            await new Promise((r) => setTimeout(r, 20));
-            if (shouldFail) throw new Error('Temporary failure');
-            return {
-              accessToken: newJwt,
-              refreshToken: 'new-rt',
-              user: mockUser,
-              impersonator: undefined,
-            };
-          },
-        },
-      };
+      const { client, getCallCount } = makeCountingClient({
+        delayMs: 20,
+        fail: () => shouldFail,
+      });
       const testCore = new AuthKitCore(
         mockConfig as any,
-        retryClient as any,
+        client as any,
         mockEncryption as any,
       );
 
-      const session = {
-        accessToken: 'expired-jwt',
-        refreshToken: 'rt-1',
-        user: mockUser,
-        impersonator: undefined,
-      };
+      const session = makeExpiredSession();
 
-      // First batch: all fail, but only 1 API call
       await Promise.allSettled([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
-      expect(callCount).toBe(1);
+      expect(getCallCount()).toBe(1);
 
-      // Second call: should retry fresh (map was cleared in finally)
       shouldFail = false;
       const result = await testCore.validateAndRefresh(session);
-      expect(callCount).toBe(2);
+      expect(getCallCount()).toBe(2);
       expect(result.refreshed).toBe(true);
       expect(result.session.accessToken).toBe(newJwt);
     });
 
     it('deduplicates separately per organizationId', async () => {
-      const newJwt =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
-      let callCount = 0;
-      const orgClient = {
-        userManagement: {
-          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
-          authenticateWithRefreshToken: async () => {
-            callCount++;
-            await new Promise((r) => setTimeout(r, 50));
-            return {
-              accessToken: newJwt,
-              refreshToken: 'new-rt',
-              user: mockUser,
-              impersonator: undefined,
-            };
-          },
-        },
-      };
+      const { client, getCallCount } = makeCountingClient();
       const testCore = new AuthKitCore(
         mockConfig as any,
-        orgClient as any,
+        client as any,
         mockEncryption as any,
       );
 
-      const session = {
-        accessToken: 'expired-jwt',
-        refreshToken: 'rt-1',
-        user: mockUser,
-        impersonator: undefined,
-      };
-
+      const session = makeExpiredSession();
       await Promise.all([
         testCore.validateAndRefresh(session, { organizationId: 'org_a' }),
         testCore.validateAndRefresh(session, { organizationId: 'org_b' }),
       ]);
 
-      expect(callCount).toBe(2);
+      expect(getCallCount()).toBe(2);
     });
   });
 
   describe('validateAndRefresh()', () => {
-    // Decodable JWT with sid + exp + org_id. Signature is garbage → verifyToken false.
     const oldJwt =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fOTk5IiwiZXhwIjoxMDAwMDAwMDAwLCJvcmdfaWQiOiJvcmdfYWJjIn0.sig';
-    const newJwt =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
 
     function makeRefreshClient(capture?: { opts?: any }) {
       return {
