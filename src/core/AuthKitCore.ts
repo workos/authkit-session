@@ -34,6 +34,15 @@ export class AuthKitCore {
   private client: WorkOS;
   private encryption: SessionEncryption;
   private clientId: string;
+  private inflightRefreshes = new Map<
+    string,
+    Promise<{
+      accessToken: string;
+      refreshToken: string;
+      user: User;
+      impersonator: Impersonator | undefined;
+    }>
+  >();
 
   constructor(
     config: AuthKitConfig,
@@ -217,23 +226,34 @@ export class AuthKitCore {
     user: User;
     impersonator: Impersonator | undefined;
   }> {
-    try {
-      const result =
-        await this.client.userManagement.authenticateWithRefreshToken({
-          refreshToken,
-          clientId: this.clientId,
-          organizationId,
-        });
+    const key = `${refreshToken}:${organizationId ?? ''}`;
+    const existing = this.inflightRefreshes.get(key);
+    if (existing) return existing;
 
-      return {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        user: result.user,
-        impersonator: result.impersonator,
-      };
-    } catch (error) {
-      throw new TokenRefreshError('Failed to refresh tokens', error, context);
-    }
+    const promise = (async () => {
+      try {
+        const result =
+          await this.client.userManagement.authenticateWithRefreshToken({
+            refreshToken,
+            clientId: this.clientId,
+            organizationId,
+          });
+
+        return {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          user: result.user,
+          impersonator: result.impersonator,
+        };
+      } catch (error) {
+        throw new TokenRefreshError('Failed to refresh tokens', error, context);
+      } finally {
+        this.inflightRefreshes.delete(key);
+      }
+    })();
+
+    this.inflightRefreshes.set(key, promise);
+    return promise;
   }
 
   /**
