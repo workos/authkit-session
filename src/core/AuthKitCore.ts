@@ -220,10 +220,11 @@ export class AuthKitCore {
     organizationId?: string,
     context?: { userId?: string; sessionId?: string },
   ): Promise<RefreshResult> {
-    const key = `${refreshToken}:${organizationId ?? ''}`;
+    const key = `${refreshToken}\0${organizationId ?? ''}`;
     const existing = this.inflightRefreshes.get(key);
     if (existing) return existing;
 
+    const cleanup = () => { this.inflightRefreshes.delete(key); };
     const promise = (async () => {
       try {
         const result =
@@ -241,12 +242,11 @@ export class AuthKitCore {
         };
       } catch (error) {
         throw new TokenRefreshError('Failed to refresh tokens', error, context);
-      } finally {
-        this.inflightRefreshes.delete(key);
       }
     })();
 
     this.inflightRefreshes.set(key, promise);
+    promise.then(cleanup, cleanup);
     return promise;
   }
 
