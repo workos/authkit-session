@@ -27,9 +27,8 @@ If applicable, add screenshots to help explain your problem.
 
 - OS: [e.g. iOS]
 - Browser [e.g. chrome, safari]
-- Framework adapter (authkit-nextjs / authkit-tanstack-start) and version
-- Framework version (Next.js / TanStack Start / etc.)
-- Next.js version [e.g. 14.2.5]
+- Framework adapter and version [e.g. authkit-nextjs 1.0.0]
+- Framework and version [e.g. Next.js 14.2.5, TanStack Start 1.0.0]
 
 **Additional context**
 Add any other context about the problem here.

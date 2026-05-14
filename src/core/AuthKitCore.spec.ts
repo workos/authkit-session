@@ -56,15 +56,15 @@ function makeExpiredSession() {
   };
 }
 
-function makeCountingClient(opts?: { delayMs?: number; fail?: () => boolean }) {
+function makeCountingClient(opts?: { fail?: () => boolean }) {
   let callCount = 0;
-  const { delayMs = 50, fail } = opts ?? {};
+  const { fail } = opts ?? {};
   const client = {
     userManagement: {
       getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
       authenticateWithRefreshToken: async () => {
         callCount++;
-        await new Promise(r => setTimeout(r, delayMs));
+        await new Promise(r => setTimeout(r, 50));
         if (fail?.()) throw new Error('Refresh failed');
         return {
           accessToken: newJwt,
@@ -294,6 +294,7 @@ describe('AuthKitCore', () => {
     });
 
     it('deduplicates concurrent calls with the same refresh token', async () => {
+      vi.useFakeTimers();
       const { client, getCallCount } = makeCountingClient();
       const testCore = new AuthKitCore(
         mockConfig as any,
@@ -302,20 +303,25 @@ describe('AuthKitCore', () => {
       );
 
       const session = makeExpiredSession();
-      const results = await Promise.all([
+      const pending = Promise.all([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
 
       expect(getCallCount()).toBe(1);
       for (const r of results) {
         expect(r.refreshed).toBe(true);
         expect(r.session.accessToken).toBe(newJwt);
       }
+      vi.useRealTimers();
     });
 
     it('propagates errors to all concurrent waiters', async () => {
+      vi.useFakeTimers();
       const { client, getCallCount } = makeCountingClient({
         fail: () => true,
       });
@@ -326,11 +332,14 @@ describe('AuthKitCore', () => {
       );
 
       const session = makeExpiredSession();
-      const results = await Promise.allSettled([
+      const pending = Promise.allSettled([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
 
       expect(getCallCount()).toBe(1);
       for (const r of results) {
@@ -339,12 +348,13 @@ describe('AuthKitCore', () => {
           expect(r.reason).toBeInstanceOf(TokenRefreshError);
         }
       }
+      vi.useRealTimers();
     });
 
     it('retries after a failed concurrent batch', async () => {
+      vi.useFakeTimers();
       let shouldFail = true;
       const { client, getCallCount } = makeCountingClient({
-        delayMs: 20,
         fail: () => shouldFail,
       });
       const testCore = new AuthKitCore(
@@ -355,20 +365,26 @@ describe('AuthKitCore', () => {
 
       const session = makeExpiredSession();
 
-      await Promise.allSettled([
+      const firstBatch = Promise.allSettled([
         testCore.validateAndRefresh(session),
         testCore.validateAndRefresh(session),
       ]);
+      await vi.advanceTimersByTimeAsync(50);
+      await firstBatch;
       expect(getCallCount()).toBe(1);
 
       shouldFail = false;
-      const result = await testCore.validateAndRefresh(session);
+      const retryPending = testCore.validateAndRefresh(session);
+      await vi.advanceTimersByTimeAsync(50);
+      const result = await retryPending;
       expect(getCallCount()).toBe(2);
       expect(result.refreshed).toBe(true);
       expect(result.session.accessToken).toBe(newJwt);
+      vi.useRealTimers();
     });
 
     it('deduplicates separately per organizationId', async () => {
+      vi.useFakeTimers();
       const { client, getCallCount } = makeCountingClient();
       const testCore = new AuthKitCore(
         mockConfig as any,
@@ -377,12 +393,16 @@ describe('AuthKitCore', () => {
       );
 
       const session = makeExpiredSession();
-      await Promise.all([
+      const pending = Promise.all([
         testCore.validateAndRefresh(session, { organizationId: 'org_a' }),
         testCore.validateAndRefresh(session, { organizationId: 'org_b' }),
       ]);
 
+      await vi.advanceTimersByTimeAsync(50);
+      await pending;
+
       expect(getCallCount()).toBe(2);
+      vi.useRealTimers();
     });
   });
 
