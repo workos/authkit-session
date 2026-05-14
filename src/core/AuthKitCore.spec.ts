@@ -44,6 +44,40 @@ const mockEncryption = {
   }),
 };
 
+const newJwt =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
+
+function makeExpiredSession() {
+  return {
+    accessToken: 'expired-jwt',
+    refreshToken: 'rt-1',
+    user: mockUser,
+    impersonator: undefined,
+  };
+}
+
+function makeCountingClient(opts?: { fail?: () => boolean }) {
+  let callCount = 0;
+  const { fail } = opts ?? {};
+  const client = {
+    userManagement: {
+      getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+      authenticateWithRefreshToken: async () => {
+        callCount++;
+        await new Promise(r => setTimeout(r, 50));
+        if (fail?.()) throw new Error('Refresh failed');
+        return {
+          accessToken: newJwt,
+          refreshToken: 'new-rt',
+          user: mockUser,
+          impersonator: undefined,
+        };
+      },
+    },
+  };
+  return { client, getCallCount: () => callCount };
+}
+
 describe('AuthKitCore', () => {
   let core: AuthKitCore;
 
@@ -258,14 +292,123 @@ describe('AuthKitCore', () => {
         TokenRefreshError,
       );
     });
+
+    it('deduplicates concurrent calls with the same refresh token', async () => {
+      vi.useFakeTimers();
+      const { client, getCallCount } = makeCountingClient();
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const session = makeExpiredSession();
+      const pending = Promise.all([
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+      ]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
+
+      expect(getCallCount()).toBe(1);
+      for (const r of results) {
+        expect(r.refreshed).toBe(true);
+        expect(r.session.accessToken).toBe(newJwt);
+      }
+      vi.useRealTimers();
+    });
+
+    it('propagates errors to all concurrent waiters', async () => {
+      vi.useFakeTimers();
+      const { client, getCallCount } = makeCountingClient({
+        fail: () => true,
+      });
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const session = makeExpiredSession();
+      const pending = Promise.allSettled([
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+      ]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
+
+      expect(getCallCount()).toBe(1);
+      for (const r of results) {
+        expect(r.status).toBe('rejected');
+        if (r.status === 'rejected') {
+          expect(r.reason).toBeInstanceOf(TokenRefreshError);
+        }
+      }
+      vi.useRealTimers();
+    });
+
+    it('retries after a failed concurrent batch', async () => {
+      vi.useFakeTimers();
+      let shouldFail = true;
+      const { client, getCallCount } = makeCountingClient({
+        fail: () => shouldFail,
+      });
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const session = makeExpiredSession();
+
+      const firstBatch = Promise.allSettled([
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+      ]);
+      await vi.advanceTimersByTimeAsync(50);
+      await firstBatch;
+      expect(getCallCount()).toBe(1);
+
+      shouldFail = false;
+      const retryPending = testCore.validateAndRefresh(session);
+      await vi.advanceTimersByTimeAsync(50);
+      const result = await retryPending;
+      expect(getCallCount()).toBe(2);
+      expect(result.refreshed).toBe(true);
+      expect(result.session.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('deduplicates separately per organizationId', async () => {
+      vi.useFakeTimers();
+      const { client, getCallCount } = makeCountingClient();
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const session = makeExpiredSession();
+      const pending = Promise.all([
+        testCore.validateAndRefresh(session, { organizationId: 'org_a' }),
+        testCore.validateAndRefresh(session, { organizationId: 'org_b' }),
+      ]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      await pending;
+
+      expect(getCallCount()).toBe(2);
+      vi.useRealTimers();
+    });
   });
 
   describe('validateAndRefresh()', () => {
-    // Decodable JWT with sid + exp + org_id. Signature is garbage → verifyToken false.
     const oldJwt =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fOTk5IiwiZXhwIjoxMDAwMDAwMDAwLCJvcmdfaWQiOiJvcmdfYWJjIn0.sig';
-    const newJwt =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
 
     function makeRefreshClient(capture?: { opts?: any }) {
       return {

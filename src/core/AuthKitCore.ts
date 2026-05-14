@@ -16,6 +16,13 @@ import type {
   SessionEncryption,
 } from './session/types.js';
 
+type RefreshResult = {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+  impersonator: Impersonator | undefined;
+};
+
 /**
  * AuthKitCore provides pure business logic for authentication operations.
  *
@@ -34,6 +41,7 @@ export class AuthKitCore {
   private client: WorkOS;
   private encryption: SessionEncryption;
   private clientId: string;
+  private inflightRefreshes = new Map<string, Promise<RefreshResult>>();
 
   constructor(
     config: AuthKitConfig,
@@ -211,29 +219,37 @@ export class AuthKitCore {
     refreshToken: string,
     organizationId?: string,
     context?: { userId?: string; sessionId?: string },
-  ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: User;
-    impersonator: Impersonator | undefined;
-  }> {
-    try {
-      const result =
-        await this.client.userManagement.authenticateWithRefreshToken({
-          refreshToken,
-          clientId: this.clientId,
-          organizationId,
-        });
+  ): Promise<RefreshResult> {
+    const key = `${refreshToken}\0${organizationId ?? ''}`;
+    const existing = this.inflightRefreshes.get(key);
+    if (existing) return existing;
 
-      return {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        user: result.user,
-        impersonator: result.impersonator,
-      };
-    } catch (error) {
-      throw new TokenRefreshError('Failed to refresh tokens', error, context);
-    }
+    const cleanup = () => {
+      this.inflightRefreshes.delete(key);
+    };
+    const promise = (async () => {
+      try {
+        const result =
+          await this.client.userManagement.authenticateWithRefreshToken({
+            refreshToken,
+            clientId: this.clientId,
+            organizationId,
+          });
+
+        return {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          user: result.user,
+          impersonator: result.impersonator,
+        };
+      } catch (error) {
+        throw new TokenRefreshError('Failed to refresh tokens', error, context);
+      }
+    })();
+
+    this.inflightRefreshes.set(key, promise);
+    promise.then(cleanup, cleanup);
+    return promise;
   }
 
   /**
