@@ -155,8 +155,16 @@ export class AuthKitCore {
         encryptedSession,
         { password: this.config.cookiePassword },
       );
+
+      if (!isSessionLike(session)) {
+        throw new Error('Decoded value is not a valid Session object');
+      }
+
       return session;
     } catch (error) {
+      if (error instanceof SessionEncryptionError) {
+        throw error;
+      }
       throw new SessionEncryptionError('Failed to decrypt session', error);
     }
   }
@@ -318,4 +326,16 @@ export class AuthKitCore {
       claims: newClaims,
     };
   }
+}
+
+function isSessionLike(value: unknown): value is Session {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).accessToken === 'string' &&
+    typeof (value as Record<string, unknown>).refreshToken === 'string' &&
+    typeof (value as Record<string, unknown>).user === 'object' &&
+    (value as Record<string, unknown>).user !== null
+  );
 }

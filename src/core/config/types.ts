@@ -21,9 +21,15 @@ export interface AuthKitConfig {
   redirectUri: string;
 
   /**
-   * The password used to encrypt the session cookie
-   * Equivalent to the WORKOS_COOKIE_PASSWORD environment variable
-   * Must be at least 32 characters long
+   * The password used to seal PKCE verifier cookies and (in sealed mode)
+   * session cookies.
+   *
+   * Optional. If not provided, a password is derived from `apiKey` and
+   * `clientId`. Set this explicitly if you need cookie continuity across
+   * API key rotations.
+   *
+   * Equivalent to the WORKOS_COOKIE_PASSWORD environment variable.
+   * Must be at least 32 characters long when explicitly provided.
    */
   cookiePassword: string;
 
