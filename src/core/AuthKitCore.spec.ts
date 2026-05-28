@@ -415,7 +415,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', 2);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                2,
+              );
             }
             return {
               accessToken: newJwt,
@@ -450,7 +454,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', 5);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                5,
+              );
             }
             return {
               accessToken: newJwt,
@@ -489,7 +497,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', null);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                null,
+              );
             }
             return {
               accessToken: newJwt,
@@ -521,7 +533,11 @@ describe('AuthKitCore', () => {
         userManagement: {
           getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
           authenticateWithRefreshToken: async () => {
-            throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+            throw new RateLimitExceededException(
+              'Too Many Requests',
+              'req_1',
+              1,
+            );
           },
         },
       };
@@ -549,7 +565,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', 300);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                300,
+              );
             }
             return {
               accessToken: newJwt,
@@ -585,7 +605,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', Infinity as any);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                Infinity as any,
+              );
             }
             return {
               accessToken: newJwt,
@@ -620,7 +644,11 @@ describe('AuthKitCore', () => {
           authenticateWithRefreshToken: async () => {
             callCount++;
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                1,
+              );
             }
             throw new Error('Network failure');
           },
@@ -654,7 +682,11 @@ describe('AuthKitCore', () => {
             callCount++;
             await new Promise(r => setTimeout(r, 50));
             if (callCount === 1) {
-              throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+              throw new RateLimitExceededException(
+                'Too Many Requests',
+                'req_1',
+                1,
+              );
             }
             return {
               accessToken: newJwt,
