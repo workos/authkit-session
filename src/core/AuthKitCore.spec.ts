@@ -553,6 +553,11 @@ describe('AuthKitCore', () => {
 
       expect(error).toBeInstanceOf(TokenRefreshError);
       expect(error.message).toContain('after rate-limit retry');
+      // Cause chain: TokenRefreshError → RateLimitExceededException (retry) → RateLimitExceededException (original)
+      expect(error.cause).toBeInstanceOf(RateLimitExceededException);
+      expect((error.cause as any).cause).toBeInstanceOf(
+        RateLimitExceededException,
+      );
       vi.useRealTimers();
     });
 
@@ -669,6 +674,10 @@ describe('AuthKitCore', () => {
       expect(error.message).toContain('after rate-limit retry');
       expect(error.cause).toBeInstanceOf(Error);
       expect((error.cause as Error).message).toBe('Network failure');
+      // Original rate-limit error preserved in chain
+      expect((error.cause as Error).cause).toBeInstanceOf(
+        RateLimitExceededException,
+      );
       vi.useRealTimers();
     });
 

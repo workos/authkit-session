@@ -261,6 +261,9 @@ export class AuthKitCore {
           try {
             return await attempt();
           } catch (retryError) {
+            if (retryError instanceof Error && !retryError.cause) {
+              retryError.cause = error;
+            }
             throw new TokenRefreshError(
               'Failed to refresh tokens after rate-limit retry',
               retryError,
