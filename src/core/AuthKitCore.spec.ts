@@ -1,3 +1,4 @@
+import { RateLimitExceededException } from '@workos-inc/node';
 import { AuthKitCore } from './AuthKitCore.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 
@@ -402,6 +403,288 @@ describe('AuthKitCore', () => {
       await pending;
 
       expect(getCallCount()).toBe(2);
+      vi.useRealTimers();
+    });
+
+    it('retries once after a RateLimitExceededException', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', 2);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1');
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await pending;
+
+      expect(callCount).toBe(2);
+      expect(result.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('honors retryAfter from the exception', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', 5);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1');
+      // Advance less than the retryAfter — should not have retried yet
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(callCount).toBe(1);
+      // Advance past retryAfter
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await pending;
+
+      expect(callCount).toBe(2);
+      expect(result.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('defaults to 1s delay when retryAfter is null', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', null);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1');
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+
+      expect(callCount).toBe(2);
+      expect(result.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('throws TokenRefreshError when retry also hits rate limit', async () => {
+      vi.useFakeTimers();
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1').catch(e => e);
+      await vi.advanceTimersByTimeAsync(1000);
+      const error = await pending;
+
+      expect(error).toBeInstanceOf(TokenRefreshError);
+      expect(error.message).toContain('after rate-limit retry');
+      vi.useRealTimers();
+    });
+
+    it('caps retryAfter at 10s', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', 300);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1');
+      // Should be capped at 10s, not 300s
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await pending;
+
+      expect(callCount).toBe(2);
+      expect(result.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('defaults to 1s for non-finite retryAfter values', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', Infinity as any);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1');
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+
+      expect(callCount).toBe(2);
+      expect(result.accessToken).toBe(newJwt);
+      vi.useRealTimers();
+    });
+
+    it('wraps non-rate-limit retry errors correctly', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+            }
+            throw new Error('Network failure');
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = testCore.refreshTokens('rt-1').catch(e => e);
+      await vi.advanceTimersByTimeAsync(1000);
+      const error = await pending;
+
+      expect(callCount).toBe(2);
+      expect(error).toBeInstanceOf(TokenRefreshError);
+      expect(error.message).toContain('after rate-limit retry');
+      expect(error.cause).toBeInstanceOf(Error);
+      expect((error.cause as Error).message).toBe('Network failure');
+      vi.useRealTimers();
+    });
+
+    it('shares retry result with concurrent dedup waiters', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      const client = {
+        userManagement: {
+          getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+          authenticateWithRefreshToken: async () => {
+            callCount++;
+            await new Promise(r => setTimeout(r, 50));
+            if (callCount === 1) {
+              throw new RateLimitExceededException('Too Many Requests', 'req_1', 1);
+            }
+            return {
+              accessToken: newJwt,
+              refreshToken: 'new-rt',
+              user: mockUser,
+              impersonator: undefined,
+            };
+          },
+        },
+      };
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const pending = Promise.all([
+        testCore.refreshTokens('rt-1'),
+        testCore.refreshTokens('rt-1'),
+        testCore.refreshTokens('rt-1'),
+      ]);
+
+      // First attempt (50ms) + retry delay (1000ms) + retry attempt (50ms)
+      await vi.advanceTimersByTimeAsync(1100);
+      const results = await pending;
+
+      expect(callCount).toBe(2);
+      for (const r of results) {
+        expect(r.accessToken).toBe(newJwt);
+      }
       vi.useRealTimers();
     });
   });
