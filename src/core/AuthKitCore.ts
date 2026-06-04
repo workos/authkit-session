@@ -1,4 +1,9 @@
-import type { Impersonator, User, WorkOS } from '@workos-inc/node';
+import {
+  RateLimitExceededException,
+  type Impersonator,
+  type User,
+  type WorkOS,
+} from '@workos-inc/node';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { constantTimeEqual, once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
@@ -228,21 +233,44 @@ export class AuthKitCore {
       this.inflightRefreshes.delete(key);
     };
     const promise = (async () => {
-      try {
+      const attempt = async () => {
         const result =
           await this.client.userManagement.authenticateWithRefreshToken({
             refreshToken,
             clientId: this.clientId,
             organizationId,
           });
-
         return {
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
           user: result.user,
           impersonator: result.impersonator,
         };
+      };
+
+      try {
+        return await attempt();
       } catch (error) {
+        if (error instanceof RateLimitExceededException) {
+          const raw = error.retryAfter;
+          const delaySec =
+            typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+              ? Math.max(1, Math.min(raw, 10))
+              : 1;
+          await new Promise(r => setTimeout(r, delaySec * 1000));
+          try {
+            return await attempt();
+          } catch (retryError) {
+            if (retryError instanceof Error && !retryError.cause) {
+              retryError.cause = error;
+            }
+            throw new TokenRefreshError(
+              'Failed to refresh tokens after rate-limit retry',
+              retryError,
+              context,
+            );
+          }
+        }
         throw new TokenRefreshError('Failed to refresh tokens', error, context);
       }
     })();
