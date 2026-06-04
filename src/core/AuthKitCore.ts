@@ -255,7 +255,7 @@ export class AuthKitCore {
           const raw = error.retryAfter;
           const delaySec =
             typeof raw === 'number' && Number.isFinite(raw) && raw > 0
-              ? Math.min(raw, 10)
+              ? Math.max(1, Math.min(raw, 10))
               : 1;
           await new Promise(r => setTimeout(r, delaySec * 1000));
           try {
