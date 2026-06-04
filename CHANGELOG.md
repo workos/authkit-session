@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3](https://github.com/workos/authkit-session/compare/v0.5.2...v0.5.3) (2026-06-04)
+
+
+### Bug Fixes
+
+* rename workflow to release.yml to match npm trusted publisher ([42efdca](https://github.com/workos/authkit-session/commit/42efdcae418340cff15d24da18f7d8f39d5a44db))
+* retry token refresh once on rate limit ([#39](https://github.com/workos/authkit-session/issues/39)) ([edcfb2a](https://github.com/workos/authkit-session/commit/edcfb2a091f28628cda54949727c1f613cf15be2))
+
 ## [0.5.2](https://github.com/workos/authkit-session/compare/v0.5.1...v0.5.2) (2026-05-18)
 
 
