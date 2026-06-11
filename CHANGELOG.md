@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/workos/authkit-session/compare/v0.5.3...v0.5.4) (2026-06-11)
+
+
+### Bug Fixes
+
+* allow @workos-inc/node v10 as peer dependency ([#40](https://github.com/workos/authkit-session/issues/40)) ([d210434](https://github.com/workos/authkit-session/commit/d2104347cadcb02e75e28b8842730f03fbade4aa))
+
 ## [0.5.3](https://github.com/workos/authkit-session/compare/v0.5.2...v0.5.3) (2026-06-04)
 
 
