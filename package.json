@@ -52,7 +52,7 @@
     "vitest": "^4.0.17"
   },
   "peerDependencies": {
-    "@workos-inc/node": "^8.0.0 || ^9.0.0"
+    "@workos-inc/node": "^8.0.0 || ^9.0.0 || ^10.0.0"
   },
   "engines": {
     "node": ">=20.0.0"
