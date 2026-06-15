@@ -3,6 +3,7 @@ import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
 import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
+import { isPKCEVerifierCookieName } from '../core/pkce/eviction.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -283,10 +284,40 @@ export class AuthService<TRequest, TResponse> {
     response: TResponse | undefined,
     options: { state: string; redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
-    const cookieName = getPKCECookieNameForState(options.state);
+    return this.clearPendingVerifierByName(response, {
+      cookieName: getPKCECookieNameForState(options.state),
+      redirectUri: options.redirectUri,
+    });
+  }
+
+  /**
+   * Emit a `Set-Cookie` header that clears a PKCE verifier cookie by its
+   * explicit name.
+   *
+   * Unlike {@link clearPendingVerifier}, this does not derive the name from
+   * a sealed `state` — it takes the cookie name directly. Use it to evict
+   * stale verifier cookies discovered by enumerating the request's cookies
+   * (e.g. via {@link selectStalePKCEVerifierCookieNames}), where the
+   * originating `state` is unknown and unrecoverable from the hashed name.
+   *
+   * The delete is computed with the same (name, path, domain) tuple the
+   * browser uses to match a cookie for replacement, so it clears the
+   * target regardless of the `redirectUri` the flow was created with. Pass
+   * `options.redirectUri` only when you need the `secure` attribute to match
+   * a per-request override.
+   */
+  async clearPendingVerifierByName(
+    response: TResponse | undefined,
+    options: { cookieName: string; redirectUri?: string },
+  ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    if (!isPKCEVerifierCookieName(options.cookieName)) {
+      throw new Error(
+        `Refusing to clear non-PKCE cookie "${options.cookieName}"`,
+      );
+    }
     return this.storage.clearCookie(
       response,
-      cookieName,
+      options.cookieName,
       getPKCECookieOptions(this.config, options.redirectUri),
     );
   }

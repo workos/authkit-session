@@ -407,6 +407,53 @@ describe('AuthService', () => {
     });
   });
 
+  describe('clearPendingVerifierByName()', () => {
+    let realStorage: ReturnType<typeof makeStorage>;
+    let realService: InstanceType<typeof AuthService>;
+
+    beforeEach(() => {
+      realStorage = makeStorage();
+      realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+    });
+
+    it('clears the named cookie without needing the sealed state', async () => {
+      const staleName = 'wos-auth-verifier-deadbeef';
+      const result = await realService.clearPendingVerifierByName(undefined, {
+        cookieName: staleName,
+      });
+
+      expect(realStorage.lastClearOptions.get(staleName)?.path).toBe('/');
+      expect(result.headers?.['Set-Cookie']).toContain(`${staleName}=`);
+    });
+
+    it('rejects non-PKCE cookie names', async () => {
+      await expect(
+        realService.clearPendingVerifierByName(undefined, {
+          cookieName: 'wos-session',
+        }),
+      ).rejects.toThrow('Refusing to clear non-PKCE cookie "wos-session"');
+    });
+
+    it('is what clearPendingVerifier delegates to (same options)', async () => {
+      const { cookieName } = await realService.createSignIn(undefined);
+      const sealedState = realStorage.cookies.get(cookieName)!;
+
+      const clearCookieSpy = vi.spyOn(realStorage, 'clearCookie');
+      await realService.clearPendingVerifier(undefined, { state: sealedState });
+
+      expect(clearCookieSpy).toHaveBeenCalledWith(
+        undefined,
+        cookieName,
+        expect.any(Object),
+      );
+    });
+  });
+
   describe('getWorkOS()', () => {
     it('returns WorkOS client', () => {
       const result = service.getWorkOS();
