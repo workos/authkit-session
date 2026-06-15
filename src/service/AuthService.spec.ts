@@ -408,15 +408,20 @@ describe('AuthService', () => {
   });
 
   describe('clearPendingVerifierByName()', () => {
-    it('clears the named cookie without needing the sealed state', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
+    let realStorage: ReturnType<typeof makeStorage>;
+    let realService: InstanceType<typeof AuthService>;
+
+    beforeEach(() => {
+      realStorage = makeStorage();
+      realService = new AuthService(
         mockConfig as any,
         realStorage as any,
         makeClient() as any,
         sessionEncryption,
       );
+    });
 
+    it('clears the named cookie without needing the sealed state', async () => {
       const staleName = 'wos-auth-verifier-deadbeef';
       const result = await realService.clearPendingVerifierByName(undefined, {
         cookieName: staleName,
@@ -427,14 +432,6 @@ describe('AuthService', () => {
     });
 
     it('rejects non-PKCE cookie names', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-
       await expect(
         realService.clearPendingVerifierByName(undefined, {
           cookieName: 'wos-session',
@@ -443,14 +440,6 @@ describe('AuthService', () => {
     });
 
     it('is what clearPendingVerifier delegates to (same options)', async () => {
-      const realStorage = makeStorage();
-      const realService = new AuthService(
-        mockConfig as any,
-        realStorage as any,
-        makeClient() as any,
-        sessionEncryption,
-      );
-
       const { cookieName } = await realService.createSignIn(undefined);
       const sealedState = realStorage.cookies.get(cookieName)!;
 
