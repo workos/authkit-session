@@ -407,6 +407,48 @@ describe('AuthService', () => {
     });
   });
 
+  describe('clearPendingVerifierByName()', () => {
+    it('clears the named cookie without needing the sealed state', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const staleName = 'wos-auth-verifier-deadbeef';
+      const result = await realService.clearPendingVerifierByName(undefined, {
+        cookieName: staleName,
+      });
+
+      expect(realStorage.lastClearOptions.get(staleName)?.path).toBe('/');
+      expect(result.headers?.['Set-Cookie']).toContain(`${staleName}=`);
+    });
+
+    it('is what clearPendingVerifier delegates to (same options)', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      const { cookieName } = await realService.createSignIn(undefined);
+      const sealedState = realStorage.cookies.get(cookieName)!;
+
+      const clearCookieSpy = vi.spyOn(realStorage, 'clearCookie');
+      await realService.clearPendingVerifier(undefined, { state: sealedState });
+
+      expect(clearCookieSpy).toHaveBeenCalledWith(
+        undefined,
+        cookieName,
+        expect.any(Object),
+      );
+    });
+  });
+
   describe('getWorkOS()', () => {
     it('returns WorkOS client', () => {
       const result = service.getWorkOS();

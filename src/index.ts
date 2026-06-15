@@ -44,6 +44,11 @@ export {
   PKCE_COOKIE_PREFIX,
   getPKCECookieNameForState,
 } from './core/pkce/cookieName.js';
+export {
+  DEFAULT_MAX_PENDING_PKCE_COOKIES,
+  isPKCEVerifierCookieName,
+  selectStalePKCEVerifierCookieNames,
+} from './core/pkce/eviction.js';
 
 // ============================================
 // Encryption Fallback
