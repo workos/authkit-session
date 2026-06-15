@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/workos/authkit-session/compare/v0.5.4...v0.6.0) (2026-06-15)
+
+
+### Features
+
+* bound pending PKCE verifier cookies with eviction ([#42](https://github.com/workos/authkit-session/issues/42)) ([c49e54d](https://github.com/workos/authkit-session/commit/c49e54dc59b31458b652723243bb113c7646e78f))
+
 ## [0.5.4](https://github.com/workos/authkit-session/compare/v0.5.3...v0.5.4) (2026-06-11)
 
 
