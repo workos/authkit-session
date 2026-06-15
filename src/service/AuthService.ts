@@ -3,6 +3,7 @@ import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
 import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
+import { isPKCEVerifierCookieName } from '../core/pkce/eviction.js';
 import { AuthOperations } from '../operations/AuthOperations.js';
 import type {
   AuthResult,
@@ -309,6 +310,11 @@ export class AuthService<TRequest, TResponse> {
     response: TResponse | undefined,
     options: { cookieName: string; redirectUri?: string },
   ): Promise<{ response?: TResponse; headers?: HeadersBag }> {
+    if (!isPKCEVerifierCookieName(options.cookieName)) {
+      throw new Error(
+        `Refusing to clear non-PKCE cookie "${options.cookieName}"`,
+      );
+    }
     return this.storage.clearCookie(
       response,
       options.cookieName,

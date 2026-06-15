@@ -426,6 +426,22 @@ describe('AuthService', () => {
       expect(result.headers?.['Set-Cookie']).toContain(`${staleName}=`);
     });
 
+    it('rejects non-PKCE cookie names', async () => {
+      const realStorage = makeStorage();
+      const realService = new AuthService(
+        mockConfig as any,
+        realStorage as any,
+        makeClient() as any,
+        sessionEncryption,
+      );
+
+      await expect(
+        realService.clearPendingVerifierByName(undefined, {
+          cookieName: 'wos-session',
+        }),
+      ).rejects.toThrow('Refusing to clear non-PKCE cookie "wos-session"');
+    });
+
     it('is what clearPendingVerifier delegates to (same options)', async () => {
       const realStorage = makeStorage();
       const realService = new AuthService(

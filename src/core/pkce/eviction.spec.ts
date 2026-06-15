@@ -50,7 +50,7 @@ describe('selectStalePKCEVerifierCookieNames', () => {
   });
 
   it('never evicts the cookie being kept, even if it is already on the request', () => {
-    const existing = ['a', 'b', 'c', 'd', keep];
+    const existing = [...['a', 'b', 'c', 'd'].map(verifier), keep];
     // existing verifiers other than keep = 4; +1 new (keep, already counted) → within cap.
     expect(selectStalePKCEVerifierCookieNames(existing, { keep })).toEqual([]);
   });
@@ -72,6 +72,17 @@ describe('selectStalePKCEVerifierCookieNames', () => {
       max: 2,
     });
     expect(new Set(stale)).toEqual(new Set(existing));
+  });
+
+  it('evicts all others even when only slightly over the cap (partial over-cap)', () => {
+    // max=3, 3 existing + 1 new = 4 > 3 → evicts all 3 existing (not just the surplus).
+    const existing = ['a', 'b', 'c'].map(verifier);
+    const stale = selectStalePKCEVerifierCookieNames(existing, {
+      keep,
+      max: 3,
+    });
+    expect(new Set(stale)).toEqual(new Set(existing));
+    expect(stale).not.toContain(keep);
   });
 
   it('exposes a sane default cap', () => {
