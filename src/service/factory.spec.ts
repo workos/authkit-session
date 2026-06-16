@@ -44,6 +44,7 @@ describe('createAuthService', () => {
       expect(typeof service.createSignIn).toBe('function');
       expect(typeof service.createSignUp).toBe('function');
       expect(typeof service.clearPendingVerifier).toBe('function');
+      expect(typeof service.clearPendingVerifierByName).toBe('function');
       expect(typeof service.getWorkOS).toBe('function');
       expect(typeof service.handleCallback).toBe('function');
     });
