@@ -194,7 +194,7 @@ export class AuthKitCore {
     }
     if (!cookieValue) {
       throw new PKCECookieMissingError(
-        'PKCE verifier cookie missing — cannot verify OAuth state. Ensure Set-Cookie headers are propagated on redirects.',
+        'Sign-in session could not be verified. Please try signing in again.',
       );
     }
     const encoder = new TextEncoder();
