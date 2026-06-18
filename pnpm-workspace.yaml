@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@workos-inc/node@10.4.0'

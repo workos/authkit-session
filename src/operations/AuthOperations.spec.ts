@@ -15,6 +15,7 @@ const mockUser = {
   object: 'user',
   firstName: 'Test',
   lastName: 'User',
+  name: 'Test User',
   emailVerified: true,
   profilePictureUrl: null,
   createdAt: '2023-01-01T00:00:00Z',
