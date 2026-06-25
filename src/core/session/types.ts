@@ -1,8 +1,4 @@
-import type {
-  Impersonator,
-  User,
-  UserManagementAuthorizationURLOptions,
-} from '@workos-inc/node';
+import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {
@@ -231,24 +227,36 @@ export interface AuthUrlOptions {
 }
 
 /**
- * Authorization params that exist only in newer `@workos-inc/node` releases are
- * surfaced *only* when the installed peer dependency actually supports them.
+ * The options object accepted by the installed SDK's `getAuthorizationUrl`.
  *
- * `maxAge` landed in `@workos-inc/node` v10.6.0. On older peers (`^8`/`^9` or
- * `<10.6`) the key is absent from the SDK option type, so this resolves to an
- * empty object and `maxAge` does not appear on {@link GetAuthorizationUrlOptions} —
- * no false promise, no silent no-op. `keyof` is read from the consumer's
- * installed version at *their* compile time, so the surface tracks the peer.
+ * Derived from the method authkit already calls at runtime rather than from a
+ * named type import, so the version gate below never depends on whether a given
+ * `@workos-inc/node` release exports its options type by name — it only needs
+ * the method to exist, which it does across the entire `^8 || ^9 || ^10` peer
+ * range. `keyof` is read from the consumer's installed version at *their*
+ * compile time, so the surface tracks the peer.
  */
-type VersionedAuthParams =
-  'maxAge' extends keyof UserManagementAuthorizationURLOptions
-    ? { maxAge?: number }
-    : { maxAge?: never };
+type SdkAuthorizationUrlOptions = Parameters<
+  WorkOS['userManagement']['getAuthorizationUrl']
+>[0];
 
 /**
  * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
  * including the `screenHint` selector used by the sign-in/sign-up variants.
+ *
+ * Kept as an `interface` so downstream consumers can still extend it via
+ * module-augmentation declaration merging.
  */
-export type GetAuthorizationUrlOptions = AuthUrlOptions & {
+export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
   screenHint?: 'sign-up' | 'sign-in';
-} & VersionedAuthParams;
+  /**
+   * Maximum allowable elapsed time, in seconds, since the user last actively
+   * authenticated (OIDC `max_age`).
+   *
+   * Requires `@workos-inc/node` >= 10.6.0, where the param was added. On older
+   * peers (`^8`/`^9`/`<10.6`) this resolves to `never`, so the option is
+   * unavailable at compile time rather than advertised and silently dropped at
+   * runtime — no false promise, no silent no-op.
+   */
+  maxAge?: 'maxAge' extends keyof SdkAuthorizationUrlOptions ? number : never;
+}
