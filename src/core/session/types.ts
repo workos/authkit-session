@@ -240,9 +240,10 @@ export interface AuthUrlOptions {
  * no false promise, no silent no-op. `keyof` is read from the consumer's
  * installed version at *their* compile time, so the surface tracks the peer.
  */
-type VersionedAuthParams = 'maxAge' extends keyof UserManagementAuthorizationURLOptions
-  ? { maxAge?: number }
-  : { maxAge?: never };
+type VersionedAuthParams =
+  'maxAge' extends keyof UserManagementAuthorizationURLOptions
+    ? { maxAge?: number }
+    : { maxAge?: never };
 
 /**
  * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
