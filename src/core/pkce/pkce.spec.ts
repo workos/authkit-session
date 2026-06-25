@@ -173,3 +173,40 @@ describe('PKCE payload size guards', () => {
     }
   });
 });
+
+describe('version-gated WorkOS passthrough params', () => {
+  // Capture the exact options object handed to the SDK's getAuthorizationUrl.
+  function capturing() {
+    let captured: Record<string, unknown> | undefined;
+    const client = {
+      ...mockClient,
+      userManagement: {
+        ...mockClient.userManagement,
+        getAuthorizationUrl: (opts: Record<string, unknown>) => {
+          captured = opts;
+          return mockClient.userManagement.getAuthorizationUrl(opts);
+        },
+      },
+    };
+    const run = (options: Parameters<typeof generate>[0] = {}) =>
+      generateAuthorizationUrl({
+        client: client as any,
+        config: config as any,
+        encryption: sessionEncryption,
+        options,
+      });
+    return { run, opts: () => captured };
+  }
+
+  it('forwards maxAge to getAuthorizationUrl when provided', async () => {
+    const { run, opts } = capturing();
+    await run({ maxAge: 60 });
+    expect(opts()?.maxAge).toBe(60);
+  });
+
+  it('omits maxAge from the SDK call when not provided (no silent default)', async () => {
+    const { run, opts } = capturing();
+    await run({});
+    expect(opts() && 'maxAge' in opts()!).toBe(false);
+  });
+});

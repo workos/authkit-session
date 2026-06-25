@@ -45,7 +45,7 @@
   "devDependencies": {
     "@types/node": "^20.17.0",
     "@vitest/coverage-v8": "^4.0.17",
-    "@workos-inc/node": "^10.4.0",
+    "@workos-inc/node": "^10.6.0",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
     "typescript": "^5.9.3",

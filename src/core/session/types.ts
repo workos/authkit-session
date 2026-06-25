@@ -1,4 +1,4 @@
-import type { Impersonator, User } from '@workos-inc/node';
+import type { Impersonator, User, WorkOS } from '@workos-inc/node';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {
@@ -227,9 +227,36 @@ export interface AuthUrlOptions {
 }
 
 /**
+ * The options object accepted by the installed SDK's `getAuthorizationUrl`.
+ *
+ * Derived from the method authkit already calls at runtime rather than from a
+ * named type import, so the version gate below never depends on whether a given
+ * `@workos-inc/node` release exports its options type by name — it only needs
+ * the method to exist, which it does across the entire `^8 || ^9 || ^10` peer
+ * range. `keyof` is read from the consumer's installed version at *their*
+ * compile time, so the surface tracks the peer.
+ */
+type SdkAuthorizationUrlOptions = Parameters<
+  WorkOS['userManagement']['getAuthorizationUrl']
+>[0];
+
+/**
  * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
  * including the `screenHint` selector used by the sign-in/sign-up variants.
+ *
+ * Kept as an `interface` so downstream consumers can still extend it via
+ * module-augmentation declaration merging.
  */
 export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
   screenHint?: 'sign-up' | 'sign-in';
+  /**
+   * Maximum allowable elapsed time, in seconds, since the user last actively
+   * authenticated (OIDC `max_age`).
+   *
+   * Requires `@workos-inc/node` >= 10.6.0, where the param was added. On older
+   * peers (`^8`/`^9`/`<10.6`) this resolves to `never`, so the option is
+   * unavailable at compile time rather than advertised and silently dropped at
+   * runtime — no false promise, no silent no-op.
+   */
+  maxAge?: 'maxAge' extends keyof SdkAuthorizationUrlOptions ? number : never;
 }

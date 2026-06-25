@@ -112,6 +112,11 @@ export async function generateAuthorizationUrl(params: {
     state: sealedState,
     codeChallenge: pkce.codeChallenge,
     codeChallengeMethod: pkce.codeChallengeMethod,
+    // Version-gated passthrough: `maxAge` only exists on the SDK option type
+    // (and is only serialized) in @workos-inc/node >= 10.6. The conditional
+    // type on GetAuthorizationUrlOptions ensures callers can only set it when
+    // their installed peer supports it; forwarded only when provided.
+    ...(options.maxAge !== undefined && { maxAge: options.maxAge }),
   });
 
   return {
