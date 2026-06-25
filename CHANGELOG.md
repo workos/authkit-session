@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/workos/authkit-session/compare/v0.6.0...v0.7.0) (2026-06-25)
+
+
+### Features
+
+* support maxAge authorization param (@workos-inc/node &gt;= 10.6) ([#49](https://github.com/workos/authkit-session/issues/49)) ([34ca118](https://github.com/workos/authkit-session/commit/34ca118cf94457b8dd7ca44e48be39073d78e246))
+
+
+### Bug Fixes
+
+* Improve PKCE cookie missing error message ([#46](https://github.com/workos/authkit-session/issues/46)) ([bc27d2b](https://github.com/workos/authkit-session/commit/bc27d2b423fd1fb893254e494d9f08449f5fe56b))
+
 ## [0.6.0](https://github.com/workos/authkit-session/compare/v0.5.4...v0.6.0) (2026-06-15)
 
 
