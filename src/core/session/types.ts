@@ -1,4 +1,8 @@
-import type { Impersonator, User } from '@workos-inc/node';
+import type {
+  Impersonator,
+  User,
+  UserManagementAuthorizationURLOptions,
+} from '@workos-inc/node';
 import type { JWTPayload } from 'jose';
 
 export interface BaseTokenClaims extends JWTPayload {
@@ -227,9 +231,23 @@ export interface AuthUrlOptions {
 }
 
 /**
+ * Authorization params that exist only in newer `@workos-inc/node` releases are
+ * surfaced *only* when the installed peer dependency actually supports them.
+ *
+ * `maxAge` landed in `@workos-inc/node` v10.6.0. On older peers (`^8`/`^9` or
+ * `<10.6`) the key is absent from the SDK option type, so this resolves to an
+ * empty object and `maxAge` does not appear on {@link GetAuthorizationUrlOptions} —
+ * no false promise, no silent no-op. `keyof` is read from the consumer's
+ * installed version at *their* compile time, so the surface tracks the peer.
+ */
+type VersionedAuthParams = 'maxAge' extends keyof UserManagementAuthorizationURLOptions
+  ? { maxAge?: number }
+  : { maxAge?: never };
+
+/**
  * Options for `createAuthorization` / `createSignIn` / `createSignUp`,
  * including the `screenHint` selector used by the sign-in/sign-up variants.
  */
-export interface GetAuthorizationUrlOptions extends AuthUrlOptions {
+export type GetAuthorizationUrlOptions = AuthUrlOptions & {
   screenHint?: 'sign-up' | 'sign-in';
-}
+} & VersionedAuthParams;
