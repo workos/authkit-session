@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/workos/authkit-session/compare/v0.7.0...v0.7.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* **factory:** add clearPendingVerifierByName to createAuthService proxy ([#45](https://github.com/workos/authkit-session/issues/45)) ([e4ae754](https://github.com/workos/authkit-session/commit/e4ae7548e4ce3277e1531ece7cbd62dfbbf593dc))
+
 ## [0.7.0](https://github.com/workos/authkit-session/compare/v0.6.0...v0.7.0) (2026-06-25)
 
 
