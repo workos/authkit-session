@@ -176,6 +176,7 @@ auth.claims.sid; // string
 | `WORKOS_COOKIE_MAX_AGE`   | `cookieMaxAge`   | Cookie lifetime in seconds           |
 | `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                        |
 | `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`           |
+| `WORKOS_ISSUER`           | `issuer`         | Expected `iss` claim of access tokens (not validated when unset) |
 
 Environment variables override programmatic config. `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI` and `WORKOS_COOKIE_PASSWORD` are required; everything else is optional.
 
