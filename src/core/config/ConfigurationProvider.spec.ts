@@ -78,6 +78,25 @@ describe('ConfigurationProvider', () => {
 
       expect(provider.getValue('apiPort')).toBeUndefined();
     });
+
+    it('parses a comma-separated issuer into a list', () => {
+      const source = vi
+        .fn()
+        .mockReturnValue('https://a.example.com, https://b.example.com,');
+      provider.configure(source);
+
+      expect(provider.getValue('issuer')).toEqual([
+        'https://a.example.com',
+        'https://b.example.com',
+      ]);
+    });
+
+    it('keeps a single issuer as a string', () => {
+      const source = vi.fn().mockReturnValue('https://a.example.com');
+      provider.configure(source);
+
+      expect(provider.getValue('issuer')).toBe('https://a.example.com');
+    });
   });
 
   describe('getEnvironmentVariableName()', () => {

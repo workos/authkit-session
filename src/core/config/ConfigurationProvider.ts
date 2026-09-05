@@ -124,6 +124,15 @@ export class ConfigurationProvider {
       return (isNaN(num) ? undefined : num) as AuthKitConfig[K];
     }
 
+    // Handle comma-separated issuer lists
+    if (key === 'issuer') {
+      const issuers = value
+        .split(',')
+        .map(issuer => issuer.trim())
+        .filter(Boolean);
+      return (issuers.length <= 1 ? issuers[0] : issuers) as AuthKitConfig[K];
+    }
+
     return value as AuthKitConfig[K];
   }
 

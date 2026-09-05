@@ -67,6 +67,22 @@ describe('AuthKitCore.verifyToken() issuer validation', () => {
     );
   });
 
+  it('passes a list of issuers through to jwtVerify', async () => {
+    const issuer = [
+      'https://auth.example.com',
+      'https://api.workos.com/user_management/test-client-id',
+    ];
+    const core = createCore({ ...baseConfig, issuer });
+
+    await expect(core.verifyToken('some.jwt.token')).resolves.toBe(true);
+
+    expect(jwtVerify).toHaveBeenCalledWith(
+      'some.jwt.token',
+      expect.any(Function),
+      { issuer },
+    );
+  });
+
   it('returns false when jwtVerify rejects the issuer', async () => {
     vi.mocked(jwtVerify).mockRejectedValueOnce(
       new Error('unexpected "iss" claim value'),
