@@ -44,6 +44,7 @@ export class ConfigurationProvider {
   private readonly optionalKeys: (keyof AuthKitConfig)[] = [
     'apiKey',
     'apiPort',
+    'issuer',
     'cookieSameSite',
     'cookieDomain',
   ];
@@ -87,7 +88,11 @@ export class ConfigurationProvider {
     const rawValue = envValue ?? this.config[key];
 
     if (rawValue != null) {
-      return this.convertValueType(key, rawValue) as AuthKitConfig[K];
+      return this.convertValueType(
+        key,
+        rawValue,
+        envValue != null,
+      ) as AuthKitConfig[K];
     }
 
     if (this.requiredKeys.includes(key)) {
@@ -116,6 +121,7 @@ export class ConfigurationProvider {
   private convertValueType<K extends keyof AuthKitConfig>(
     key: K,
     value: unknown,
+    fromEnvironment = false,
   ): AuthKitConfig[K] | undefined {
     if (typeof value !== 'string') {
       return value as AuthKitConfig[K];
@@ -132,8 +138,8 @@ export class ConfigurationProvider {
       return (isNaN(num) ? undefined : num) as AuthKitConfig[K];
     }
 
-    // Handle comma-separated issuer lists
-    if (key === 'issuer') {
+    // Handle comma-separated issuer lists (environment values only)
+    if (key === 'issuer' && fromEnvironment) {
       const issuers = value
         .split(',')
         .map(issuer => issuer.trim())

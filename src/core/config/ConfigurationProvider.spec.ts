@@ -102,6 +102,12 @@ describe('ConfigurationProvider', () => {
 
       expect(provider.getValue('issuer')).toBe('https://a.example.com');
     });
+
+    it('does not split a programmatic issuer string', () => {
+      provider.configure({ issuer: 'https://a.example.com/path,a' });
+
+      expect(provider.getValue('issuer')).toBe('https://a.example.com/path,a');
+    });
   });
 
   describe('getEnvironmentVariableName()', () => {
@@ -169,6 +175,28 @@ describe('ConfigurationProvider', () => {
       expect(config.cookieDomain).toBe('.example.com');
       expect(config.cookieSameSite).toBe('strict');
       expect(config.apiPort).toBe(8443);
+    });
+
+    it('includes optional keys that are only set in the value source', () => {
+      const validPassword = 'a'.repeat(32);
+      provider.configure(
+        {
+          clientId: 'test-client',
+          apiKey: 'test-api-key',
+          redirectUri: 'http://localhost:3000/callback',
+          cookiePassword: validPassword,
+        },
+        key =>
+          key === 'WORKOS_ISSUER'
+            ? 'https://a.example.com,https://b.example.com'
+            : undefined,
+      );
+
+      const config = provider.getConfig();
+      expect(config.issuer).toEqual([
+        'https://a.example.com',
+        'https://b.example.com',
+      ]);
     });
   });
 
