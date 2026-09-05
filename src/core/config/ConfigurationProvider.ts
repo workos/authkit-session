@@ -40,6 +40,14 @@ export class ConfigurationProvider {
     'cookiePassword',
   ];
 
+  // Optional keys with no default; only resolvable from the value source
+  private readonly optionalKeys: (keyof AuthKitConfig)[] = [
+    'apiPort',
+    'issuer',
+    'cookieSameSite',
+    'cookieDomain',
+  ];
+
   /**
    * Convert a camelCase string to an uppercase, underscore-separated environment variable name.
    * @param str The string to convert
@@ -79,7 +87,11 @@ export class ConfigurationProvider {
     const rawValue = envValue ?? this.config[key];
 
     if (rawValue != null) {
-      return this.convertValueType(key, rawValue) as AuthKitConfig[K];
+      return this.convertValueType(
+        key,
+        rawValue,
+        envValue != null,
+      ) as AuthKitConfig[K];
     }
 
     if (this.requiredKeys.includes(key)) {
@@ -108,6 +120,7 @@ export class ConfigurationProvider {
   private convertValueType<K extends keyof AuthKitConfig>(
     key: K,
     value: unknown,
+    fromEnvironment = false,
   ): AuthKitConfig[K] | undefined {
     if (typeof value !== 'string') {
       return value as AuthKitConfig[K];
@@ -124,8 +137,8 @@ export class ConfigurationProvider {
       return (isNaN(num) ? undefined : num) as AuthKitConfig[K];
     }
 
-    // Handle comma-separated issuer lists
-    if (key === 'issuer') {
+    // Handle comma-separated issuer lists (environment values only)
+    if (key === 'issuer' && fromEnvironment) {
       const issuers = value
         .split(',')
         .map(issuer => issuer.trim())
@@ -193,6 +206,7 @@ export class ConfigurationProvider {
     const allKeys = new Set<keyof AuthKitConfig>([
       ...(Object.keys(this.config) as (keyof AuthKitConfig)[]),
       ...this.requiredKeys,
+      ...this.optionalKeys,
     ]);
 
     // Merge each key, with environment variables taking precedence
