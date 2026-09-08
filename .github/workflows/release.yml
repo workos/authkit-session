@@ -48,11 +48,11 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-      - name: Build project
-        run: pnpm run build
-
       - name: Restore public package registry
         uses: workos/setup-socket-firewall/teardown@ca93dd8aa351f54f4729fe3377a9be23c631c25d # v1
+
+      - name: Build project
+        run: pnpm run build
 
       - name: Publish
         run: |
