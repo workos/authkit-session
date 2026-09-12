@@ -70,13 +70,19 @@ export class AuthKitCore {
 
   /**
    * Verify a JWT access token against WorkOS JWKS.
+   * The `iss` claim is only validated when `config.issuer` is set.
    *
    * @param token - The JWT access token to verify
    * @returns true if valid, false otherwise
    */
   async verifyToken(token: string): Promise<boolean> {
+    const issuer = this.config.issuer;
     try {
-      await jwtVerify(token, this.getPublicKey());
+      await jwtVerify(
+        token,
+        this.getPublicKey(),
+        issuer ? { issuer } : undefined,
+      );
       return true;
     } catch {
       return false;
