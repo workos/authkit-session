@@ -108,16 +108,26 @@ describe('config', () => {
       const config = getFullConfig();
       expect(config).toMatchObject({ clientId: 'test-client' });
     });
-  });
 
-  describe('validateConfig()', () => {
-    it('passes with all required config', () => {
-      const validPassword = 'a'.repeat(32);
+    it('derives cookiePassword when not provided', () => {
       configure({
         clientId: 'test-client',
         apiKey: 'test-api-key',
         redirectUri: 'http://localhost:3000/callback',
-        cookiePassword: validPassword,
+      });
+
+      const config = getFullConfig();
+      expect(config.cookiePassword).toBeDefined();
+      expect(config.cookiePassword).toContain('test-api-key');
+    });
+  });
+
+  describe('validateConfig()', () => {
+    it('passes with all required config', () => {
+      configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
       });
 
       expect(() => validateConfig()).not.toThrow();
@@ -133,9 +143,6 @@ describe('config', () => {
       expect(() => validateConfig()).toThrow(/WORKOS_CLIENT_ID is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_API_KEY is required/);
       expect(() => validateConfig()).toThrow(/WORKOS_REDIRECT_URI is required/);
-      expect(() => validateConfig()).toThrow(
-        /WORKOS_COOKIE_PASSWORD is required/,
-      );
     });
 
     it('throws for short cookie password', () => {

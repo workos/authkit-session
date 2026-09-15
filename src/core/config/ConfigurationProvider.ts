@@ -37,7 +37,6 @@ export class ConfigurationProvider {
     'clientId',
     'apiKey',
     'redirectUri',
-    'cookiePassword',
   ];
 
   /**
@@ -155,14 +154,19 @@ export class ConfigurationProvider {
 
       if (!value) {
         errors.push(`${envKey} is required`);
-      } else if (key === 'cookiePassword') {
-        // Special validation for cookiePassword length
-        const password = String(value);
-        if (password.length < 32) {
-          errors.push(
-            `${envKey} must be at least 32 characters (currently ${password.length})`,
-          );
-        }
+      }
+    }
+
+    // Validate cookiePassword length when explicitly provided
+    const passwordEnvKey = this.getEnvironmentVariableName('cookiePassword');
+    const explicitPassword =
+      this.getEnvironmentValue(passwordEnvKey) ?? this.config.cookiePassword;
+    if (explicitPassword != null) {
+      const password = String(explicitPassword);
+      if (password.length < 32) {
+        errors.push(
+          `${passwordEnvKey} must be at least 32 characters (currently ${password.length})`,
+        );
       }
     }
 
@@ -202,6 +206,17 @@ export class ConfigurationProvider {
       }
     }
 
+    if (!fullConfig.cookiePassword) {
+      fullConfig.cookiePassword = deriveCookiePassword(
+        fullConfig.apiKey,
+        fullConfig.clientId,
+      );
+    }
+
     return fullConfig;
   }
+}
+
+function deriveCookiePassword(apiKey: string, clientId: string): string {
+  return `wos-ck:${apiKey}:${clientId}`;
 }
