@@ -17,6 +17,15 @@ describe('utils', () => {
       ['protocol-relative URL', '//evil.com/steal'],
       ['backslash smuggle', '/\\evil.com/path'],
       ['double-backslash', '\\\\evil.com/path'],
+      ['opaque path with backslash', 'x:\\evil.com'],
+      ['non-special scheme with slash-backslash', 'x:/\\evil.com'],
+      ['opaque path with double-backslash', 'x:\\\\evil.com'],
+      ['opaque path with backslash-slash', 'x:\\/evil.com'],
+      ['opaque path targeting the throwaway host', 'x:\\placeholder.invalid'],
+      [
+        'opaque path with query and fragment',
+        'x:\\evil.com/path?next=/home#login',
+      ],
       ['javascript: scheme', 'javascript:alert(1)'],
       ['data: scheme', 'data:text/html,<script>alert(1)</script>'],
       ['tab smuggling', '/\tevil.com'],
@@ -58,6 +67,22 @@ describe('utils', () => {
       expect(sanitizeReturnPathname(undefined, '//evil.com')).toBe('/');
       expect(sanitizeReturnPathname(undefined, 'https://evil.com/x')).toBe(
         '/x',
+      );
+    });
+
+    it('uses the safe fallback when the normalized input would leave the origin', () => {
+      expect(
+        sanitizeReturnPathname('x:\\evil.com', '/login?retry=1#form'),
+      ).toBe('/login?retry=1#form');
+    });
+
+    it('rejects opaque-path bypasses in the fallback too', () => {
+      expect(sanitizeReturnPathname(undefined, 'x:\\evil.com')).toBe('/');
+      expect(sanitizeReturnPathname(undefined, 'x:\\placeholder.invalid')).toBe(
+        '/',
+      );
+      expect(sanitizeReturnPathname('x:/\\evil.com', 'x:\\/evil.com')).toBe(
+        '/',
       );
     });
 

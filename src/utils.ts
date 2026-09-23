@@ -47,9 +47,9 @@ export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
  * state) to a same-origin relative URL. The returned value always begins
  * with exactly one `/`, safe to emit directly as a `Location` header.
  *
- * Parsing against a throwaway origin lets the WHATWG URL parser strip any
- * smuggled host, scheme, backslash, tab, or newline; the leading-slash
- * normalization defuses `//evil.com`-style protocol-relative redirects
+ * Parsing against a throwaway origin strips smuggled hosts and schemes.
+ * Re-resolving the normalized output also catches opaque paths whose raw
+ * backslashes become an authority when interpreted as a relative URL
  * (CWE-601). `fallback` is sanitized by the same pipeline so a hostile
  * fallback can't reopen the hole.
  */
@@ -57,12 +57,17 @@ export function sanitizeReturnPathname(
   input: unknown,
   fallback: string = '/',
 ): string {
+  const base = 'https://placeholder.invalid';
   for (const candidate of [input, fallback]) {
     if (typeof candidate !== 'string' || candidate.length === 0) continue;
     try {
-      const parsed = new URL(candidate, 'https://placeholder.invalid');
+      const parsed = new URL(candidate, base);
       const path = '/' + parsed.pathname.replace(/^\/+/, '');
-      return `${path}${parsed.search}${parsed.hash}`;
+      const result = `${path}${parsed.search}${parsed.hash}`;
+      // Reject authority syntax even when it names the throwaway host itself.
+      if (!result.startsWith('/\\') && new URL(result, base).origin === base) {
+        return result;
+      }
     } catch {
       // Unparseable; try the next candidate.
     }
