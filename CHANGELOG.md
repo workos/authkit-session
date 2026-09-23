@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/workos/authkit-session/compare/v0.7.1...v0.7.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* keep normalized return paths same-origin ([#57](https://github.com/workos/authkit-session/issues/57)) ([831221e](https://github.com/workos/authkit-session/commit/831221e41f7484dea86bbd2fd4913ceff2e6b379))
+
 ## [0.7.1](https://github.com/workos/authkit-session/compare/v0.7.0...v0.7.1) (2026-06-26)
 
 
