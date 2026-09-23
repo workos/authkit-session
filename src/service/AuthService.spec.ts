@@ -464,6 +464,36 @@ describe('AuthService', () => {
   });
 
   describe('handleCallback()', () => {
+    it.each([
+      'x:\\evil.com',
+      'x:/\\evil.com',
+      'x:\\\\evil.com',
+      'x:\\/evil.com',
+    ])(
+      'keeps the callback return path same-origin for %s',
+      async returnPathname => {
+        const realStorage = makeStorage();
+        const realService = new AuthService(
+          mockConfig as any,
+          realStorage as any,
+          makeClient() as any,
+          sessionEncryption,
+        );
+        const { cookieName } = await realService.createAuthorization('res', {
+          returnPathname,
+        });
+        const result = await realService.handleCallback('req', 'res', {
+          code: 'auth-code',
+          state: realStorage.cookies.get(cookieName)!,
+        });
+
+        expect(
+          new URL(result.returnPathname, mockConfig.redirectUri).origin,
+        ).toBe(new URL(mockConfig.redirectUri).origin);
+        expect(result.returnPathname).toBe('/');
+      },
+    );
+
     it('round-trips through createSignIn → handleCallback', async () => {
       const capture: { authCall?: Record<string, unknown> } = {};
       const realStorage = makeStorage();
