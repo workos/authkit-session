@@ -164,16 +164,17 @@ auth.claims.sid; // string
 
 ## Configuration Options
 
-| Environment Variable      | Config Key       | Description                          |
-| ------------------------- | ---------------- | ------------------------------------ |
-| `WORKOS_CLIENT_ID`        | `clientId`       | WorkOS client ID                     |
-| `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key                       |
-| `WORKOS_REDIRECT_URI`     | `redirectUri`    | OAuth callback URL                   |
-| `WORKOS_COOKIE_PASSWORD`  | `cookiePassword` | 32+ char encryption key              |
-| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos-session`) |
-| `WORKOS_COOKIE_MAX_AGE`   | `cookieMaxAge`   | Cookie lifetime in seconds           |
-| `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                        |
-| `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`           |
+| Environment Variable      | Config Key       | Description                                                                                         |
+| ------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`        | `clientId`       | WorkOS client ID                                                                                    |
+| `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key                                                                                      |
+| `WORKOS_REDIRECT_URI`     | `redirectUri`    | OAuth callback URL                                                                                  |
+| `WORKOS_COOKIE_PASSWORD`  | `cookiePassword` | 32+ char encryption key                                                                             |
+| `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos-session`)                                                                |
+| `WORKOS_COOKIE_MAX_AGE`   | `cookieMaxAge`   | Cookie lifetime in seconds                                                                          |
+| `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                                                                                       |
+| `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`                                                                          |
+| `WORKOS_ISSUER`           | `issuer`         | Expected `iss` claim of access tokens, comma-separated to accept several (not validated when unset) |
 
 Environment variables override programmatic config.
 
