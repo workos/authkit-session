@@ -53,6 +53,7 @@ export interface AuthKitConfig {
 
   /**
    * The sameSite attribute for the session cookie
+   * Equivalent to the WORKOS_COOKIE_SAME_SITE environment variable
    */
   cookieSameSite?: 'strict' | 'lax' | 'none';
 
@@ -65,6 +66,7 @@ export interface AuthKitConfig {
 
   /**
    * The domain for the session cookie
+   * Equivalent to the WORKOS_COOKIE_DOMAIN environment variable
    */
   cookieDomain?: string;
 }
