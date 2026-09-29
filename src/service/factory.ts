@@ -3,7 +3,8 @@ import { once } from '../utils.js';
 import { getFullConfig } from '../core/config.js';
 import type { AuthKitConfig } from '../core/config/types.js';
 import { getWorkOS } from '../core/client/workos.js';
-import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
+import ironWebcryptoEncryption from '../core/encryption/ironWebcryptoEncryption.js';
+import { SessionEncryptionAdapter } from '../core/encryption/sessionEncryption.js';
 import type {
   SessionEncryption,
   SessionStorage,
@@ -47,7 +48,8 @@ export function createAuthService<TRequest, TResponse>(options: {
   const {
     sessionStorageFactory,
     clientFactory = () => getWorkOS(),
-    encryptionFactory = () => sessionEncryption,
+    encryptionFactory = () =>
+      new SessionEncryptionAdapter(ironWebcryptoEncryption),
   } = options;
 
   // Lazily create the real AuthService with resolved config

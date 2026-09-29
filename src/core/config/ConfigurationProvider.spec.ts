@@ -118,6 +118,42 @@ describe('ConfigurationProvider', () => {
       const config = provider.getConfig();
       expect(config.cookieName).toBe('test-cookie');
     });
+
+    it('uses explicit cookiePassword when provided', () => {
+      const validPassword = 'a'.repeat(32);
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: validPassword,
+      });
+
+      const config = provider.getConfig();
+      expect(config.cookiePassword).toBe(validPassword);
+    });
+
+    it('derives cookiePassword from apiKey and clientId when not provided', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+      });
+
+      const config = provider.getConfig();
+      expect(config.cookiePassword).toBe('wos-ck:test-api-key:test-client');
+    });
+
+    it('derives a deterministic password', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+      });
+
+      const config1 = provider.getConfig();
+      const config2 = provider.getConfig();
+      expect(config1.cookiePassword).toBe(config2.cookiePassword);
+    });
   });
 
   describe('validate()', () => {
@@ -135,7 +171,7 @@ describe('ConfigurationProvider', () => {
 
     it('throws with all missing required fields at once', () => {
       expect(() => provider.validate()).toThrow(
-        /AuthKit configuration error\. Missing or invalid environment variables:\n\n  • WORKOS_CLIENT_ID is required\n  • WORKOS_API_KEY is required\n  • WORKOS_REDIRECT_URI is required\n  • WORKOS_COOKIE_PASSWORD is required/,
+        /AuthKit configuration error\. Missing or invalid environment variables:\n\n  • WORKOS_CLIENT_ID is required\n  • WORKOS_API_KEY is required\n  • WORKOS_REDIRECT_URI is required/,
       );
     });
 
@@ -183,6 +219,16 @@ describe('ConfigurationProvider', () => {
       expect(error).toThrow(
         /WORKOS_COOKIE_PASSWORD must be at least 32 characters/,
       );
+    });
+
+    it('passes without cookiePassword when apiKey and clientId are set', () => {
+      provider.configure({
+        clientId: 'test-client',
+        apiKey: 'test-api-key',
+        redirectUri: 'http://localhost:3000/callback',
+      });
+
+      expect(() => provider.validate()).not.toThrow();
     });
 
     it('prefers environment values over config in validation', () => {
