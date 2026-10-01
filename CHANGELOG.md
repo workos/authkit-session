@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.2](https://github.com/workos/authkit-session/compare/v0.7.1...v0.7.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* include missing optionalKeys when building config from env ([#51](https://github.com/workos/authkit-session/issues/51)) ([51382bf](https://github.com/workos/authkit-session/commit/51382bfcef82f4a09954c0b2260cea38e12192b1))
+* keep normalized return paths same-origin ([#57](https://github.com/workos/authkit-session/issues/57)) ([831221e](https://github.com/workos/authkit-session/commit/831221e41f7484dea86bbd2fd4913ceff2e6b379))
+
 ## [0.7.1](https://github.com/workos/authkit-session/compare/v0.7.0...v0.7.1) (2026-06-26)
 
 
