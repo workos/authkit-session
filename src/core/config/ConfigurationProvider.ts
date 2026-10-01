@@ -40,6 +40,12 @@ export class ConfigurationProvider {
     'cookiePassword',
   ];
 
+  private readonly optionalKeys: (keyof AuthKitConfig)[] = [
+    'apiPort',
+    'cookieSameSite',
+    'cookieDomain',
+  ];
+
   /**
    * Convert a camelCase string to an uppercase, underscore-separated environment variable name.
    * @param str The string to convert
@@ -184,6 +190,7 @@ export class ConfigurationProvider {
     const allKeys = new Set<keyof AuthKitConfig>([
       ...(Object.keys(this.config) as (keyof AuthKitConfig)[]),
       ...this.requiredKeys,
+      ...this.optionalKeys,
     ]);
 
     // Merge each key, with environment variables taking precedence

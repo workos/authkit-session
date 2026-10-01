@@ -91,6 +91,12 @@ describe('ConfigurationProvider', () => {
       expect(provider['getEnvironmentVariableName']('cookieMaxAge')).toBe(
         'WORKOS_COOKIE_MAX_AGE',
       );
+      expect(provider['getEnvironmentVariableName']('cookieDomain')).toBe(
+        'WORKOS_COOKIE_DOMAIN',
+      );
+      expect(provider['getEnvironmentVariableName']('cookieSameSite')).toBe(
+        'WORKOS_COOKIE_SAME_SITE',
+      );
     });
   });
 
@@ -117,6 +123,28 @@ describe('ConfigurationProvider', () => {
 
       const config = provider.getConfig();
       expect(config.cookieName).toBe('test-cookie');
+    });
+
+    it('reads optional env vars that have no defaults without configure()', () => {
+      const validPassword = 'a'.repeat(32);
+      const source = vi.fn((key: string) => {
+        if (key === 'WORKOS_CLIENT_ID') return 'env-client';
+        if (key === 'WORKOS_API_KEY') return 'env-api-key';
+        if (key === 'WORKOS_REDIRECT_URI')
+          return 'http://localhost:3000/callback';
+        if (key === 'WORKOS_COOKIE_PASSWORD') return validPassword;
+        if (key === 'WORKOS_COOKIE_DOMAIN') return '.example.com';
+        if (key === 'WORKOS_COOKIE_SAME_SITE') return 'strict';
+        if (key === 'WORKOS_API_PORT') return '8443';
+        return undefined;
+      });
+
+      provider.configure(source);
+
+      const config = provider.getConfig();
+      expect(config.cookieDomain).toBe('.example.com');
+      expect(config.cookieSameSite).toBe('strict');
+      expect(config.apiPort).toBe(8443);
     });
   });
 
