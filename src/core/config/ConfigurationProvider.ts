@@ -33,14 +33,16 @@ export class ConfigurationProvider {
 
   private valueSource: ValueSource = defaultSource;
 
+  // `apiKey` is intentionally optional: without it AuthKit runs as a PKCE
+  // public client (sign-in only). See `AuthKitPublicConfig`.
   private readonly requiredKeys: (keyof AuthKitConfig)[] = [
     'clientId',
-    'apiKey',
     'redirectUri',
     'cookiePassword',
   ];
 
   private readonly optionalKeys: (keyof AuthKitConfig)[] = [
+    'apiKey',
     'apiPort',
     'cookieSameSite',
     'cookieDomain',
