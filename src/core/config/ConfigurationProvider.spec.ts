@@ -1,5 +1,10 @@
 import { vi } from 'vitest';
 import { ConfigurationProvider } from './ConfigurationProvider.js';
+import type {
+  AuthKitConfidentialConfig,
+  AuthKitConfig,
+  AuthKitPublicConfig,
+} from './types.js';
 
 describe('ConfigurationProvider', () => {
   let provider: ConfigurationProvider;
@@ -163,7 +168,7 @@ describe('ConfigurationProvider', () => {
 
     it('throws with all missing required fields at once', () => {
       expect(() => provider.validate()).toThrow(
-        /AuthKit configuration error\. Missing or invalid environment variables:\n\n  • WORKOS_CLIENT_ID is required\n  • WORKOS_API_KEY is required\n  • WORKOS_REDIRECT_URI is required\n  • WORKOS_COOKIE_PASSWORD is required/,
+        /AuthKit configuration error\. Missing or invalid environment variables:\n\n  • WORKOS_CLIENT_ID is required\n  • WORKOS_REDIRECT_URI is required\n  • WORKOS_COOKIE_PASSWORD is required/,
       );
     });
 
@@ -206,7 +211,7 @@ describe('ConfigurationProvider', () => {
       });
 
       const error = () => provider.validate();
-      expect(error).toThrow(/WORKOS_API_KEY is required/);
+      expect(error).not.toThrow(/WORKOS_API_KEY/);
       expect(error).toThrow(/WORKOS_REDIRECT_URI is required/);
       expect(error).toThrow(
         /WORKOS_COOKIE_PASSWORD must be at least 32 characters/,
@@ -225,6 +230,162 @@ describe('ConfigurationProvider', () => {
       provider.configure(source);
 
       expect(() => provider.validate()).not.toThrow();
+    });
+  });
+
+  describe('public client (no API key)', () => {
+    const publicEnv: Record<string, string> = {
+      WORKOS_CLIENT_ID: 'client_public',
+      WORKOS_REDIRECT_URI: 'http://localhost:3000/callback',
+      WORKOS_COOKIE_PASSWORD: 'a'.repeat(32),
+    };
+    let savedApiKey: string | undefined;
+
+    beforeEach(() => {
+      // Make sure a key in the test runner's environment can't leak in.
+      savedApiKey = process.env.WORKOS_API_KEY;
+      delete process.env.WORKOS_API_KEY;
+    });
+
+    afterEach(() => {
+      if (savedApiKey !== undefined) process.env.WORKOS_API_KEY = savedApiKey;
+    });
+
+    it('resolves apiKey to undefined instead of throwing', () => {
+      expect(provider.getValue('apiKey')).toBeUndefined();
+    });
+
+    it('validates without an apiKey', () => {
+      provider.setValueSource(publicEnv);
+
+      expect(() => provider.validate()).not.toThrow();
+    });
+
+    it('builds a full config from an env-only value source', () => {
+      provider.setValueSource(publicEnv);
+
+      const config = provider.getConfig();
+      expect(config).not.toHaveProperty('apiKey');
+      expect(config).toMatchObject({
+        clientId: 'client_public',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: publicEnv.WORKOS_COOKIE_PASSWORD,
+      });
+    });
+
+    it('builds a full config from process.env with no WORKOS_API_KEY', () => {
+      const fresh = new ConfigurationProvider(); // default process.env source
+      const saved = { ...process.env };
+      Object.assign(process.env, publicEnv);
+      try {
+        expect(() => fresh.validate()).not.toThrow();
+        const config = fresh.getConfig();
+        expect(config.apiKey).toBeUndefined();
+        expect(config.clientId).toBe('client_public');
+      } finally {
+        for (const key of Object.keys(publicEnv)) {
+          if (saved[key] === undefined) delete process.env[key];
+          else process.env[key] = saved[key];
+        }
+      }
+    });
+
+    it('accepts a programmatic config without apiKey', () => {
+      provider.configure({
+        clientId: 'client_public',
+        redirectUri: 'http://localhost:3000/callback',
+        cookiePassword: 'a'.repeat(32),
+      });
+
+      expect(() => provider.validate()).not.toThrow();
+      expect(provider.getConfig().apiKey).toBeUndefined();
+    });
+
+    it('still reads apiKey from an env-only source (confidential mode)', () => {
+      provider.setValueSource({ ...publicEnv, WORKOS_API_KEY: 'sk_test_env' });
+
+      expect(provider.getConfig().apiKey).toBe('sk_test_env');
+    });
+
+    it.each([
+      ['clientId', 'WORKOS_CLIENT_ID'],
+      ['redirectUri', 'WORKOS_REDIRECT_URI'],
+      ['cookiePassword', 'WORKOS_COOKIE_PASSWORD'],
+    ] as const)('still requires %s', (key, envKey) => {
+      const rest = { ...publicEnv };
+      delete rest[envKey];
+      provider.setValueSource(rest);
+
+      expect(() => provider.getValue(key)).toThrow(
+        `Missing required configuration value for ${key} (${envKey}).`,
+      );
+      expect(() => provider.getConfig()).toThrow(envKey);
+      expect(() => provider.validate()).toThrow(`${envKey} is required`);
+    });
+
+    it('still validates the cookie password length', () => {
+      provider.setValueSource({
+        ...publicEnv,
+        WORKOS_COOKIE_PASSWORD: 'short',
+      });
+
+      expect(() => provider.validate()).toThrow(
+        /WORKOS_COOKIE_PASSWORD must be at least 32 characters/,
+      );
+    });
+  });
+
+  describe('AuthKitConfig types', () => {
+    const base = {
+      clientId: 'client_123',
+      redirectUri: 'http://localhost:3000/callback',
+      cookiePassword: 'a'.repeat(32),
+      apiHttps: true,
+      cookieMaxAge: 60,
+      cookieName: 'wos-session',
+    };
+
+    it('narrows on the presence of apiKey', () => {
+      const narrow = (config: AuthKitConfig) => {
+        if (config.apiKey !== undefined) {
+          expectTypeOf(config).toEqualTypeOf<AuthKitConfidentialConfig>();
+          expectTypeOf(config.apiKey).toEqualTypeOf<string>();
+        } else {
+          expectTypeOf(config).toEqualTypeOf<AuthKitPublicConfig>();
+        }
+        if ('apiKey' in config) {
+          expectTypeOf(config.apiKey).toEqualTypeOf<string | undefined>();
+        }
+      };
+      narrow({ ...base, apiKey: 'sk_test' });
+      narrow(base);
+    });
+
+    it('types a runtime-resolved apiKey as optional', () => {
+      expectTypeOf<AuthKitConfig['apiKey']>().toEqualTypeOf<
+        string | undefined
+      >();
+    });
+
+    it('accepts both client shapes and rejects invalid ones', () => {
+      const confidential: AuthKitConfig = { ...base, apiKey: 'sk_test' };
+      const publicConfig: AuthKitConfig = base;
+      // @ts-expect-error a confidential config must carry a key
+      const missingKey: AuthKitConfidentialConfig = base;
+      // @ts-expect-error a public config cannot carry a key
+      const keyedPublic: AuthKitPublicConfig = { ...base, apiKey: 'sk_test' };
+      // @ts-expect-error clientId is required in both modes
+      const missingClientId: AuthKitPublicConfig = {
+        ...base,
+        clientId: undefined,
+      };
+      expect([
+        confidential,
+        publicConfig,
+        missingKey,
+        keyedPublic,
+        missingClientId,
+      ]).toHaveLength(5);
     });
   });
 });
