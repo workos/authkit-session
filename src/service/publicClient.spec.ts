@@ -6,6 +6,7 @@
  * assert on the request the SDK actually sends to
  * `/user_management/authenticate`.
  */
+import { createHash } from 'node:crypto';
 import { vi } from 'vitest';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
@@ -175,6 +176,12 @@ describe.each([
       code: 'code_123',
       code_verifier: expect.any(String),
     });
+    // The verifier sent must be the one behind the URL's S256 challenge.
+    expect(
+      createHash('sha256')
+        .update(exchange.body.code_verifier)
+        .digest('base64url'),
+    ).toBe(authorizationUrl.searchParams.get('code_challenge'));
     expectClientCredentials(exchange);
 
     // 3. Explicit refresh of the saved session.
@@ -241,12 +248,23 @@ describe.each([
       const service = await createService();
       const workos = service.getWorkOS();
 
-      await expect(workos.userManagement.getUser('user_123')).rejects.toThrow(
-        ApiKeyRequiredException,
-      );
-      await expect(workos.organizations.listOrganizations()).rejects.toThrow(
-        ApiKeyRequiredException,
-      );
+      // The SDK owns this error (AuthKit doesn't wrap the client); pin that it
+      // is the actionable API-key error for the called path, not a 401.
+      for (const [call, path] of [
+        [
+          () => workos.userManagement.getUser('user_123'),
+          '/user_management/users/user_123',
+        ],
+        [() => workos.organizations.listOrganizations(), '/organizations'],
+      ] as const) {
+        const error = await call().catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ApiKeyRequiredException);
+        expect(error).toMatchObject({ status: 403, path });
+        expect((error as Error).message).toContain(
+          `API key required for "${path}"`,
+        );
+        expect((error as Error).message).toContain('new WorkOS("sk_...")');
+      }
       expect(fetchMock).not.toHaveBeenCalled();
     },
   );
