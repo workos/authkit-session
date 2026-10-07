@@ -374,11 +374,9 @@ describe('ConfigurationProvider', () => {
       const missingKey: AuthKitConfidentialConfig = base;
       // @ts-expect-error a public config cannot carry a key
       const keyedPublic: AuthKitPublicConfig = { ...base, apiKey: 'sk_test' };
+      const { clientId: _clientId, ...noClientId } = base;
       // @ts-expect-error clientId is required in both modes
-      const missingClientId: AuthKitPublicConfig = {
-        ...base,
-        clientId: undefined,
-      };
+      const missingClientId: AuthKitPublicConfig = noClientId;
       expect([
         confidential,
         publicConfig,
