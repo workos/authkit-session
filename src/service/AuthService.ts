@@ -325,6 +325,11 @@ export class AuthService<TRequest, TResponse> {
   /**
    * Get the WorkOS client instance.
    * Useful for direct API calls not covered by AuthKit.
+   *
+   * WorkOS management APIs (e.g. `organizations.*`,
+   * `userManagement.getUser`) require an API key (`WORKOS_API_KEY` or
+   * `configure({ apiKey })`). In public-client (keyless) mode they throw an
+   * `ApiKeyRequiredException` before any request.
    */
   getWorkOS(): WorkOS {
     return this.client;

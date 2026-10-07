@@ -131,7 +131,7 @@ describe('config', () => {
 
     it('shows all missing fields at once', () => {
       expect(() => validateConfig()).toThrow(/WORKOS_CLIENT_ID is required/);
-      expect(() => validateConfig()).toThrow(/WORKOS_API_KEY is required/);
+      expect(() => validateConfig()).not.toThrow(/WORKOS_API_KEY/);
       expect(() => validateConfig()).toThrow(/WORKOS_REDIRECT_URI is required/);
       expect(() => validateConfig()).toThrow(
         /WORKOS_COOKIE_PASSWORD is required/,
