@@ -28,10 +28,12 @@ pnpm add @workos/authkit-session
 
 ```bash
 WORKOS_CLIENT_ID=your-client-id
-WORKOS_API_KEY=your-api-key
 WORKOS_REDIRECT_URI=https://yourdomain.com/auth/callback
 WORKOS_COOKIE_PASSWORD=must-be-at-least-32-characters-long-secret
+WORKOS_API_KEY=your-api-key # optional; needed for WorkOS management APIs
 ```
+
+Without `WORKOS_API_KEY`, AuthKit runs as a PKCE public client. See [Public client (keyless) mode](#public-client-keyless-mode).
 
 Or programmatically:
 
@@ -40,9 +42,9 @@ import { configure } from '@workos/authkit-session';
 
 configure({
   clientId: 'your-client-id',
-  apiKey: 'your-api-key',
   redirectUri: 'https://yourdomain.com/auth/callback',
   cookiePassword: 'must-be-at-least-32-characters-long-secret',
+  apiKey: 'your-api-key', // optional: omit for public client (keyless) mode
 });
 ```
 
@@ -167,7 +169,7 @@ auth.claims.sid; // string
 | Environment Variable      | Config Key       | Description                          |
 | ------------------------- | ---------------- | ------------------------------------ |
 | `WORKOS_CLIENT_ID`        | `clientId`       | WorkOS client ID                     |
-| `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key                       |
+| `WORKOS_API_KEY`          | `apiKey`         | WorkOS API key (optional, see below) |
 | `WORKOS_REDIRECT_URI`     | `redirectUri`    | OAuth callback URL                   |
 | `WORKOS_COOKIE_PASSWORD`  | `cookiePassword` | 32+ char encryption key              |
 | `WORKOS_COOKIE_NAME`      | `cookieName`     | Cookie name (default: `wos-session`) |
@@ -175,7 +177,30 @@ auth.claims.sid; // string
 | `WORKOS_COOKIE_DOMAIN`    | `cookieDomain`   | Cookie domain                        |
 | `WORKOS_COOKIE_SAME_SITE` | `cookieSameSite` | `lax`, `strict`, or `none`           |
 
-Environment variables override programmatic config.
+Environment variables override programmatic config. `WORKOS_CLIENT_ID`, `WORKOS_REDIRECT_URI` and `WORKOS_COOKIE_PASSWORD` are required; everything else is optional.
+
+### Public client (keyless) mode
+
+If your service only signs users in and shouldn't hold a WorkOS secret key, leave `WORKOS_API_KEY` unset. AuthKit then runs as an OAuth public client and needs only three variables:
+
+```bash
+WORKOS_CLIENT_ID=your-client-id
+WORKOS_REDIRECT_URI=https://yourdomain.com/auth/callback
+WORKOS_COOKIE_PASSWORD=must-be-at-least-32-characters-long-secret
+```
+
+Every sign-in already uses PKCE: the code verifier is sealed into an HttpOnly cookie on the browser that started the flow, so only that browser can complete the code exchange, and no client secret is sent. Session refresh sends the refresh token with your client ID and no secret.
+
+What works without a key: `createSignIn` / `createSignUp` / `createAuthorization`, `handleCallback`, `withAuth` (including automatic refresh), `refreshSession`, `switchOrganization`, `signOut`, and the session storage helpers.
+
+What needs a key: WorkOS management APIs called directly through `getWorkOS()` or `authService.getWorkOS()`, such as `organizations.*` or `userManagement.getUser`. Without a key the WorkOS SDK rejects them with an `ApiKeyRequiredException` before sending a request.
+
+Keyless mode needs `@workos-inc/node` 8.0.0 or later, which every version in this package's peer range (`^8.0.0 || ^9.0.0 || ^10.0.0`) satisfies.
+
+In TypeScript, `AuthKitConfig` is a union of `AuthKitConfidentialConfig` (with `apiKey`) and `AuthKitPublicConfig` (without). Because configuration is resolved from the environment at runtime, `getConfig('apiKey')` is typed `string | undefined`.
+
+> [!IMPORTANT]
+> The WorkOS Node SDK falls back to `process.env.WORKOS_API_KEY` when no key is configured. If that variable is set in the server's environment, a key is in play, even if you use a custom value source with `configure()`. To run keyless, make sure `WORKOS_API_KEY` is absent from the process environment.
 
 ## API Overview
 
@@ -275,7 +300,7 @@ If the callback URL has no `state` (malformed callback), skip this call — the
 
 ### Direct Access (Advanced)
 
-For maximum control, use the primitives directly:
+For maximum control, use the primitives directly. WorkOS management APIs on the client from `getWorkOS()` need an API key; in [public client mode](#public-client-keyless-mode) they throw an `ApiKeyRequiredException`.
 
 ```typescript
 import {
