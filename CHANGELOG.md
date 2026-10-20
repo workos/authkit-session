@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/workos/authkit-session/compare/v0.7.1...v0.8.0) (2026-10-19)
+
+
+### Features
+
+* support keyless PKCE public clients ([#59](https://github.com/workos/authkit-session/issues/59)) ([9d45629](https://github.com/workos/authkit-session/commit/9d45629a7bd09d4a452bbd49ef29c00fe910a745))
+
+
+### Bug Fixes
+
+* include missing optionalKeys when building config from env ([#51](https://github.com/workos/authkit-session/issues/51)) ([51382bf](https://github.com/workos/authkit-session/commit/51382bfcef82f4a09954c0b2260cea38e12192b1))
+* keep normalized return paths same-origin ([#57](https://github.com/workos/authkit-session/issues/57)) ([831221e](https://github.com/workos/authkit-session/commit/831221e41f7484dea86bbd2fd4913ceff2e6b379))
+* trigger release PR checks with SDK App token ([#60](https://github.com/workos/authkit-session/issues/60)) ([8ead812](https://github.com/workos/authkit-session/commit/8ead8120cfcf602dde2b5c44c195b78e220a1846))
+
 ## [0.7.1](https://github.com/workos/authkit-session/compare/v0.7.0...v0.7.1) (2026-06-26)
 
 
