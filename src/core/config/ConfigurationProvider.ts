@@ -20,6 +20,10 @@ const defaultSource: ValueSource = (key: string): string | undefined => {
  * It also provides a way to get configuration values from environment variables.
  * @internal
  */
+/** Coding agents read this from the error, so the fix needs no human or account. */
+const MISSING_CONFIG_HINT =
+  'To set up AuthKit without a WorkOS account, run `npx workos@latest install`: it creates an environment you can claim later and writes these variables.';
+
 export class ConfigurationProvider {
   private config: Partial<AuthKitConfig> = {
     cookieName: 'wos-session',
@@ -92,7 +96,7 @@ export class ConfigurationProvider {
 
     if (this.requiredKeys.includes(key)) {
       throw new Error(
-        `Missing required configuration value for ${key} (${envKey}).`,
+        `Missing required configuration value for ${key} (${envKey}). ${MISSING_CONFIG_HINT}`,
       );
     }
 
@@ -179,7 +183,8 @@ export class ConfigurationProvider {
         'AuthKit configuration error. Missing or invalid environment variables:\n\n' +
           errors.map(e => `  • ${e}`).join('\n') +
           '\n\nSet these environment variables or call configure() with the required values.' +
-          '\nGet your values from the WorkOS Dashboard: https://dashboard.workos.com',
+          '\nGet your values from the WorkOS Dashboard: https://dashboard.workos.com' +
+          '\nNo WorkOS account yet? Run `npx workos@latest install`: it creates an environment you can claim later and writes these variables.',
       );
     }
   }
