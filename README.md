@@ -196,7 +196,7 @@ What works without a key: `createSignIn` / `createSignUp` / `createAuthorization
 
 What needs a key: WorkOS management APIs called directly through `getWorkOS()` or `authService.getWorkOS()`, such as `organizations.*` or `userManagement.getUser`. Without a key the WorkOS SDK rejects them with an `ApiKeyRequiredException` before sending a request.
 
-Keyless mode needs `@workos-inc/node` 8.0.0 or later, which every version in this package's peer range (`^8.0.0 || ^9.0.0 || ^10.0.0`) satisfies.
+Keyless mode needs `@workos-inc/node` 8.0.0 or later, which every version in this package's peer range (`^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0`) satisfies.
 
 In TypeScript, `AuthKitConfig` is a union of `AuthKitConfidentialConfig` (with `apiKey`) and `AuthKitPublicConfig` (without). Because configuration is resolved from the environment at runtime, `getConfig('apiKey')` is typed `string | undefined`.
 
