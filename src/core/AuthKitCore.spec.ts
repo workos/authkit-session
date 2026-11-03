@@ -1,6 +1,7 @@
 import { RateLimitExceededException } from '@workos-inc/node';
 import { AuthKitCore } from './AuthKitCore.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
+import sessionEncryption from './encryption/ironWebcryptoEncryption.js';
 
 const mockConfig = {
   cookiePassword: 'test-password-that-is-32-chars-long!!',
@@ -16,9 +17,9 @@ const mockUser = {
   name: 'Test User',
   emailVerified: true,
   profilePictureUrl: null,
-  createdAt: '2023-01-01T00:00:00Z',
-  updatedAt: '2023-01-01T00:00:00Z',
-  lastSignInAt: '2023-01-01T00:00:00Z',
+  createdAt: new Date('2023-01-01T00:00:00Z'),
+  updatedAt: new Date('2023-01-01T00:00:00Z'),
+  lastSignInAt: new Date('2023-01-01T00:00:00Z'),
   locale: 'en-US',
   externalId: null,
   metadata: {},
@@ -278,6 +279,50 @@ describe('AuthKitCore', () => {
 
       await expect(failingCore.decryptSession('bad-data')).rejects.toThrow(
         SessionEncryptionError,
+      );
+    });
+
+    describe('user timestamps', () => {
+      const iso = '2023-01-01T00:00:00.000Z';
+
+      // Seal for real so timestamps go through JSON exactly as in a cookie.
+      async function roundTrip(
+        version: string | undefined,
+        lastSignInAt: Date | null = new Date(iso),
+      ) {
+        const sdkCore = new AuthKitCore(
+          mockConfig as any,
+          { ...mockClient, version } as any,
+          sessionEncryption,
+        );
+        const sealed = await sdkCore.encryptSession({
+          ...makeExpiredSession(),
+          user: { ...mockUser, lastSignInAt },
+        } as any);
+        return (await sdkCore.decryptSession(sealed)).user as any;
+      }
+
+      it('revives them as Dates with @workos-inc/node >= 12', async () => {
+        const user = await roundTrip('12.1.0');
+        expect(user.createdAt).toEqual(new Date(iso));
+        expect(user.updatedAt).toEqual(new Date(iso));
+        expect(user.lastSignInAt).toEqual(new Date(iso));
+      });
+
+      it('keeps a null lastSignInAt null', async () => {
+        const user = await roundTrip('12.0.0', null);
+        expect(user.lastSignInAt).toBeNull();
+        expect(user.createdAt).toEqual(new Date(iso));
+      });
+
+      it.each(['8.0.0', '10.14.0', '11.0.0', undefined])(
+        'leaves them as strings with SDK version %s',
+        async version => {
+          const user = await roundTrip(version);
+          expect(user.createdAt).toBe(iso);
+          expect(user.updatedAt).toBe(iso);
+          expect(user.lastSignInAt).toBe(iso);
+        },
       );
     });
   });
