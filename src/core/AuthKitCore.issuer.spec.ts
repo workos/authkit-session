@@ -1,11 +1,19 @@
 import { jwtVerify } from 'jose';
 import { AuthKitCore } from './AuthKitCore.js';
 
+const userAccessTokenPayload = vi.hoisted(() => ({
+  sid: 'session_123',
+  auth_time: 1700000000,
+}));
+
 vi.mock('jose', async importOriginal => {
   const actual = await importOriginal<typeof import('jose')>();
   return {
     ...actual,
-    jwtVerify: vi.fn().mockResolvedValue({ payload: {}, protectedHeader: {} }),
+    jwtVerify: vi.fn().mockResolvedValue({
+      payload: userAccessTokenPayload,
+      protectedHeader: {},
+    }),
   };
 });
 
@@ -93,5 +101,26 @@ describe('AuthKitCore.verifyToken() issuer validation', () => {
     });
 
     await expect(core.verifyToken('some.jwt.token')).resolves.toBe(false);
+  });
+});
+
+describe('AuthKitCore.verifyToken() token claims', () => {
+  it.each([
+    ['sub_profile user', { sub_profile: 'user' }, true],
+    ['agent sub_profile', { sub_profile: 'ai_agent' }, false],
+    ['widget sub_type', { sub_type: 'authkit' }, false],
+    ['missing auth_time', { auth_time: undefined }, false],
+    ['string auth_time', { auth_time: '1700000000' }, false],
+    ['missing sid', { sid: undefined }, false],
+    ['numeric sid', { sid: 123 }, false],
+  ])('%s', async (_name, claims, expected) => {
+    vi.mocked(jwtVerify).mockResolvedValueOnce({
+      payload: { ...userAccessTokenPayload, ...claims },
+      protectedHeader: { alg: 'RS256' },
+    } as any);
+
+    await expect(
+      createCore(baseConfig).verifyToken('some.jwt.token'),
+    ).resolves.toBe(expected);
   });
 });
