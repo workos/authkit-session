@@ -192,6 +192,13 @@ describe.each([
         headers: { cookie: sessionCookie },
       }),
     );
+    // Read back from the cookie, timestamps match the installed SDK's `User`.
+    const sdkMajor = Number.parseInt(service.getWorkOS().version, 10);
+    expect(session!.user.createdAt).toEqual(
+      sdkMajor >= 12
+        ? new Date('2024-01-01T00:00:00Z')
+        : '2024-01-01T00:00:00Z',
+    );
     nextAuthenticate = async () =>
       authenticateResponse(await signAccessToken(now + 600), 'refresh_2');
     const refreshed = await service.refreshSession(session!);

@@ -21,6 +21,18 @@ describe('ironWebcryptoEncryption', () => {
       expect(unsealed).toEqual(testData);
     });
 
+    it('seals Dates as ISO strings, like iron-session', async () => {
+      const sealed = await encryption.sealData(
+        { createdAt: new Date('2024-01-01T00:00:00Z') },
+        { password: testPassword },
+      );
+      const unsealed = await encryption.unsealData(sealed, {
+        password: testPassword,
+      });
+
+      expect(unsealed).toEqual({ createdAt: '2024-01-01T00:00:00.000Z' });
+    });
+
     it('produces version 2 tokens', async () => {
       const sealed = await encryption.sealData(testData, {
         password: testPassword,

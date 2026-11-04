@@ -49,6 +49,9 @@ export class SessionEncryption implements SessionEncryptionInterface {
       ttl: ttl * 1000, // Convert seconds to milliseconds
       timestampSkewSec: 60,
       localtimeOffsetMsec: 0,
+      // Same as iron-session: Dates (e.g. @workos-inc/node 12's User timestamps)
+      // become ISO strings. iron-webcrypto's default encoder throws on them.
+      encode: JSON.stringify,
     });
 
     // Add the version delimiter exactly like iron-session does

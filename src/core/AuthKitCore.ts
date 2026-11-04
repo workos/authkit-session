@@ -21,6 +21,9 @@ import type {
   SessionEncryption,
 } from './session/types.js';
 
+const toDate = (value: unknown) =>
+  value == null ? value : new Date(value as string | Date);
+
 type RefreshResult = {
   accessToken: string;
   refreshToken: string;
@@ -166,10 +169,33 @@ export class AuthKitCore {
         encryptedSession,
         { password: this.config.cookiePassword },
       );
-      return session;
+      return this.reviveUserTimestamps(session);
     } catch (error) {
       throw new SessionEncryptionError('Failed to decrypt session', error);
     }
+  }
+
+  /**
+   * `@workos-inc/node` >= 12 types `User` timestamps as `Date`, but a sealed
+   * session stores them as ISO strings. With that SDK installed, turn them back
+   * into `Date`s. Earlier SDKs type them as strings, so leave those as is.
+   */
+  private reviveUserTimestamps(session: Session): Session {
+    const sdkMajorVersion = Number.parseInt(this.client.version, 10);
+    if (!(sdkMajorVersion >= 12) || !session?.user) {
+      return session;
+    }
+
+    const user = session.user as unknown as Record<string, unknown>;
+    return {
+      ...session,
+      user: {
+        ...user,
+        createdAt: toDate(user.createdAt),
+        updatedAt: toDate(user.updatedAt),
+        lastSignInAt: toDate(user.lastSignInAt),
+      } as unknown as User,
+    };
   }
 
   /**
