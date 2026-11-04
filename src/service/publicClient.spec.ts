@@ -41,7 +41,7 @@ function cookiePair(setCookie: string | string[] | undefined) {
 const signingKey = generateKeyPair('RS256');
 async function signAccessToken(expiresAt: number) {
   const { privateKey } = await signingKey;
-  return new SignJWT({ sid: 'session_123' })
+  return new SignJWT({ sid: 'session_123', auth_time: expiresAt - 300 })
     .setProtectedHeader({ alg: 'RS256', kid: 'key_1' })
     .setIssuedAt(expiresAt - 300)
     .setExpirationTime(expiresAt)
@@ -246,6 +246,20 @@ describe.each([
       refresh_token: 'refresh_1',
     });
     expectClientCredentials(authenticateCalls[0]!);
+
+    // The refreshed session authenticates without another refresh.
+    const { headers: refreshedHeaders } = await service.saveSession(
+      undefined,
+      refreshedSessionData!,
+    );
+    const next = await service.withAuth(
+      new Request('http://localhost:3000/', {
+        headers: { cookie: cookiePair(refreshedHeaders?.['Set-Cookie']) },
+      }),
+    );
+    expect(next.auth.user?.id).toBe('user_123');
+    expect(next.refreshedSessionData).toBeUndefined();
+    expect(authenticateCalls).toHaveLength(1);
   });
 
   it.runIf(!apiKey)(
