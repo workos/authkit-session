@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/workos/authkit-session/compare/v0.9.0...v0.9.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **session:** Reject non-user access tokens in session cookies ([#70](https://github.com/workos/authkit-session/issues/70)) ([e484381](https://github.com/workos/authkit-session/commit/e4843816a7f60dc0db509fdf4ee78fedeb93152d))
+
 ## [0.9.0](https://github.com/workos/authkit-session/compare/v0.8.0...v0.9.0) (2026-11-04)
 
 
