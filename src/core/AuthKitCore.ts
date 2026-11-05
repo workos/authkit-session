@@ -4,7 +4,12 @@ import {
   type User,
   type WorkOS,
 } from '@workos-inc/node';
-import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
+import {
+  createRemoteJWKSet,
+  decodeJwt,
+  jwtVerify,
+  type JWTPayload,
+} from 'jose';
 import { constantTimeEqual, once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
 import {
@@ -81,12 +86,12 @@ export class AuthKitCore {
   async verifyToken(token: string): Promise<boolean> {
     const issuer = this.config.issuer;
     try {
-      await jwtVerify(
+      const { payload } = await jwtVerify(
         token,
         this.getPublicKey(),
         issuer ? { issuer } : undefined,
       );
-      return true;
+      return isUserAccessTokenPayload(payload);
     } catch {
       return false;
     }
@@ -378,4 +383,15 @@ export class AuthKitCore {
       claims: newClaims,
     };
   }
+}
+
+// Other token types signed by the same environment key (agent and widget
+// tokens) must not authenticate a session cookie.
+function isUserAccessTokenPayload(payload: JWTPayload): boolean {
+  return (
+    typeof payload.sid === 'string' &&
+    typeof payload.auth_time === 'number' &&
+    (payload.sub_profile === undefined || payload.sub_profile === 'user') &&
+    payload.sub_type === undefined
+  );
 }
