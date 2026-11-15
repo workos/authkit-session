@@ -132,11 +132,19 @@ describe('refresh failure classification', () => {
       'network_error',
     ],
     [
+      // The wrapper is a plain Error, so only the cause's code can match.
       'a Node connection error code on a nested cause',
-      new TypeError('fetch failed', {
+      new Error('Unexpected error', {
         cause: Object.assign(new Error('connect'), { code: 'ECONNREFUSED' }),
       }),
       'network_error',
+    ],
+    [
+      'a Node timeout error code on a nested cause',
+      new Error('Unexpected error', {
+        cause: Object.assign(new Error('connect'), { code: 'ETIMEDOUT' }),
+      }),
+      'timeout',
     ],
     [
       'an AbortError',
