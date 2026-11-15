@@ -13,6 +13,7 @@ import {
 import { constantTimeEqual, once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
 import {
+  classifyRefreshFailure,
   OAuthStateMismatchError,
   PKCECookieMissingError,
   SessionEncryptionError,
@@ -255,7 +256,8 @@ export class AuthKitCore {
    * @param organizationId - Optional organization ID to switch to
    * @param context - Optional context for error reporting (userId, sessionId)
    * @returns New access token, refresh token, user, and impersonator
-   * @throws TokenRefreshError if refresh fails
+   * @throws TokenRefreshError if refresh fails, with `retryable` and `reason`
+   *   set from the WorkOS error (after a rate-limit retry, from the retry's)
    */
   async refreshTokens(
     refreshToken: string,
@@ -298,17 +300,21 @@ export class AuthKitCore {
           try {
             return await attempt();
           } catch (retryError) {
+            const classification = classifyRefreshFailure(retryError);
             if (retryError instanceof Error && !retryError.cause) {
               retryError.cause = error;
             }
             throw new TokenRefreshError(
               'Failed to refresh tokens after rate-limit retry',
               retryError,
-              context,
+              { ...context, ...classification },
             );
           }
         }
-        throw new TokenRefreshError('Failed to refresh tokens', error, context);
+        throw new TokenRefreshError('Failed to refresh tokens', error, {
+          ...context,
+          ...classifyRefreshFailure(error),
+        });
       }
     })();
 

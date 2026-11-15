@@ -1,6 +1,7 @@
 import type { WorkOS } from '@workos-inc/node';
 import { AuthKitCore } from '../core/AuthKitCore.js';
 import type { AuthKitConfig } from '../core/config/types.js';
+import { type RefreshFailure, TokenRefreshError } from '../core/errors.js';
 import { getPKCECookieNameForState } from '../core/pkce/cookieName.js';
 import { getPKCECookieOptions } from '../core/pkce/cookieOptions.js';
 import { isPKCEVerifierCookieName } from '../core/pkce/eviction.js';
@@ -93,14 +94,31 @@ export class AuthService<TRequest, TResponse> {
    * 2. Validates and potentially refreshes the session (via core)
    * 3. Returns auth result + optionally refreshed session data
    *
+   * Never throws. Any failure returns `{ auth: { user: null } }`.
+   *
+   * When the access token needed a refresh and the refresh failed, the result
+   * also has `refreshError: { retryable, reason }`:
+   * - `retryable: true` (network error, timeout, 429, 5xx): WorkOS may be
+   *   briefly unavailable and the session may still be good. Keep the session
+   *   cookie and treat this request as signed out; a later request retries the
+   *   refresh.
+   * - `retryable: false` (`invalid_grant`, an authentication step the user must
+   *   complete, other 4xx, or an unrecognized error): the session is over.
+   *   Clear the session cookie and sign in again.
+   *
+   * Every other outcome (no cookie, a cookie that can't be decrypted, a valid
+   * session, a successful refresh) has no `refreshError` key.
+   *
    * @param request - Framework-specific request object
-   * @returns Auth result and optional refreshed session data
+   * @returns Auth result, optional refreshed session data, and `refreshError`
+   *   when a refresh failed
    */
   async withAuth<TCustomClaims = CustomClaims>(
     request: TRequest,
   ): Promise<{
     auth: AuthResult<TCustomClaims>;
     refreshedSessionData?: string;
+    refreshError?: RefreshFailure;
   }> {
     try {
       const encryptedSession = await this.storage.getSession(request);
@@ -134,7 +152,11 @@ export class AuthService<TRequest, TResponse> {
       }
 
       return { auth };
-    } catch {
+    } catch (error) {
+      if (error instanceof TokenRefreshError) {
+        const { retryable, reason } = error;
+        return { auth: { user: null }, refreshError: { retryable, reason } };
+      }
       return { auth: { user: null } };
     }
   }

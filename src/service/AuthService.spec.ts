@@ -1,3 +1,5 @@
+import { GenericServerException, OauthException } from '@workos-inc/node';
+import { AuthKitCore } from '../core/AuthKitCore.js';
 import sessionEncryption from '../core/encryption/ironWebcryptoEncryption.js';
 import {
   OAuthStateMismatchError,
@@ -73,6 +75,11 @@ function makeStorage(initialSession: string | null = 'encrypted-session-data') {
 }
 
 const testVerifier = 'test-verifier-abcdefghijklmnopqrstuvwxyz1234567890';
+
+// For withAuth refresh failure tests that must not reach a token refresh.
+const unexpectedRefresh = async () => {
+  throw new Error('refresh should not be called');
+};
 
 function makeClient(capture?: { authCall?: Record<string, unknown> }) {
   return {
@@ -171,6 +178,139 @@ describe('AuthService', () => {
       const result = await testService.withAuth('request');
 
       expect(result.auth.user).toBeNull();
+    });
+
+    describe('refresh failure', () => {
+      // Same decodable fake token the AuthKitCore specs use for refreshed sessions.
+      const decodableJwt =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsInNpZCI6InNlc3Npb25fbmV3IiwiZXhwIjozMDAwMDAwMDAwfQ.sig';
+
+      function makeRefreshService(
+        refresh: () => Promise<unknown>,
+        opts: {
+          storage?: ReturnType<typeof makeStorage>;
+          encryption?: unknown;
+        } = {},
+      ) {
+        const client = makeClient();
+        return new AuthService(
+          mockConfig as any,
+          (opts.storage ?? storage) as any,
+          {
+            ...client,
+            userManagement: {
+              ...client.userManagement,
+              authenticateWithRefreshToken: vi.fn(refresh),
+            },
+          } as any,
+          (opts.encryption ?? mockEncryptionSessionShape) as any,
+        );
+      }
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('returns a retryable refreshError when the refresh fails with a 503', async () => {
+        // 'test-access-token' isn't a valid JWT, so withAuth tries a refresh.
+        const testService = makeRefreshService(async () => {
+          throw new GenericServerException(
+            503,
+            'Service Unavailable',
+            {},
+            'req_1',
+          );
+        });
+
+        const result = await testService.withAuth('request');
+
+        expect(result).toStrictEqual({
+          auth: { user: null },
+          refreshError: { retryable: true, reason: 'server_error' },
+        });
+      });
+
+      it('returns a terminal refreshError when the refresh fails with invalid_grant', async () => {
+        const testService = makeRefreshService(async () => {
+          throw new OauthException(
+            400,
+            'req_1',
+            'invalid_grant',
+            'Session has already ended.',
+            {},
+          );
+        });
+
+        const result = await testService.withAuth('request');
+
+        expect(result).toStrictEqual({
+          auth: { user: null },
+          refreshError: { retryable: false, reason: 'invalid_grant' },
+        });
+      });
+
+      it('has no refreshError key when there is no session cookie', async () => {
+        const testService = makeRefreshService(unexpectedRefresh, {
+          storage: makeStorage(null),
+        });
+
+        const result = await testService.withAuth('request');
+
+        expect(result.auth.user).toBeNull();
+        expect('refreshError' in result).toBe(false);
+      });
+
+      it('has no refreshError key when the cookie cannot be decrypted', async () => {
+        const testService = makeRefreshService(unexpectedRefresh, {
+          encryption: {
+            sealData: async () => 'encrypted',
+            unsealData: async () => {
+              throw new Error('Decryption failed');
+            },
+          },
+        });
+
+        const result = await testService.withAuth('request');
+
+        expect(result.auth.user).toBeNull();
+        expect('refreshError' in result).toBe(false);
+      });
+
+      it('has no refreshError key for a valid session', async () => {
+        vi.spyOn(AuthKitCore.prototype, 'verifyToken').mockResolvedValue(true);
+        const testService = makeRefreshService(unexpectedRefresh, {
+          encryption: {
+            ...mockEncryptionSessionShape,
+            unsealData: async () => ({
+              accessToken: decodableJwt,
+              refreshToken: 'test-refresh-token',
+              user: mockUser,
+              impersonator: undefined,
+            }),
+          },
+        });
+
+        const result = await testService.withAuth('request');
+
+        expect(result.auth.user).toEqual(mockUser);
+        expect(result.refreshedSessionData).toBeUndefined();
+        expect('refreshError' in result).toBe(false);
+      });
+
+      it('has no refreshError key after a successful refresh', async () => {
+        const testService = makeRefreshService(async () => ({
+          accessToken: decodableJwt,
+          refreshToken: 'new-refresh-token',
+          user: mockUser,
+          impersonator: undefined,
+        }));
+
+        const result = await testService.withAuth('request');
+
+        expect(result.auth.user).toEqual(mockUser);
+        expect(result.refreshedSessionData).toBe('encrypted-session-data');
+        expect('refreshError' in result).toBe(false);
+      });
     });
   });
 
