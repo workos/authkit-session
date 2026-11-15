@@ -97,14 +97,17 @@ export class AuthService<TRequest, TResponse> {
    * Never throws. Any failure returns `{ auth: { user: null } }`.
    *
    * When the access token needed a refresh and the refresh failed, the result
-   * also has `refreshError: { retryable, reason }`:
-   * - `retryable: true` (network error, timeout, 429, 5xx): WorkOS may be
-   *   briefly unavailable and the session may still be good. Keep the session
-   *   cookie and treat this request as signed out; a later request retries the
-   *   refresh.
-   * - `retryable: false` (`invalid_grant`, an authentication step the user must
-   *   complete, other 4xx, or an unrecognized error): the session is over.
-   *   Clear the session cookie and sign in again.
+   * also has `refreshError: { retryable, reason }` (see `RefreshFailureReason`):
+   * - `retryable: true` for a network error, a timeout (HTTP 408 or an aborted
+   *   request), HTTP 429, or HTTP 500, 502, 503 or 504, including one whose
+   *   body isn't JSON (such as a load balancer's HTML error page). WorkOS may
+   *   be briefly unavailable and the session may still be good. Keep the
+   *   session cookie and treat this request as signed out; a later request
+   *   retries the refresh.
+   * - `retryable: false` for `invalid_grant`, an authentication step the user
+   *   must complete (such as `mfa_enrollment` or `sso_required`), any other
+   *   HTTP error status (such as 400, 401, 403 or 501), or an unrecognized
+   *   error. The session is over. Clear the session cookie and sign in again.
    *
    * Every other outcome (no cookie, a cookie that can't be decrypted, a valid
    * session, a successful refresh) has no `refreshError` key.

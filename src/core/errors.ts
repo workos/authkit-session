@@ -90,9 +90,12 @@ type AuthenticationErrorReason =
 /** How a failed token refresh was classified. */
 export interface RefreshFailure {
   /**
-   * `true` when the failure is likely temporary (network, timeout, 429, 5xx):
-   * keep the session cookie and try again on a later request. `false` when
-   * the session is over: clear the cookie and sign in again.
+   * `true` when the failure is likely temporary (a network error, a timeout
+   * from HTTP 408 or an aborted request, HTTP 429, or HTTP 500, 502, 503 or
+   * 504, also with a non-JSON body): keep the session cookie and try again on
+   * a later request. `false` when the session is over (`invalid_grant`, an
+   * authentication step, any other HTTP error such as 501, or an unrecognized
+   * error): clear the cookie and sign in again.
    */
   retryable: boolean;
   reason: RefreshFailureReason;
