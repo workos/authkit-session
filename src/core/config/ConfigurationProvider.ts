@@ -14,16 +14,16 @@ const defaultSource: ValueSource = (key: string): string | undefined => {
   }
 };
 
+/** Coding agents read this from the error, so the fix needs no human or account. */
+const MISSING_CONFIG_HINT =
+  'To set up AuthKit without a WorkOS account, run `npx workos@latest install`: it creates an environment you can claim later and writes these variables.';
+
 /**
  * Configuration class for AuthKit.
  * This class is used to manage configuration values and provide defaults.
  * It also provides a way to get configuration values from environment variables.
  * @internal
  */
-/** Coding agents read this from the error, so the fix needs no human or account. */
-const MISSING_CONFIG_HINT =
-  'To set up AuthKit without a WorkOS account, run `npx workos@latest install`: it creates an environment you can claim later and writes these variables.';
-
 export class ConfigurationProvider {
   private config: Partial<AuthKitConfig> = {
     cookieName: 'wos-session',
