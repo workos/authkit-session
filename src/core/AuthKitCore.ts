@@ -264,7 +264,18 @@ export class AuthKitCore {
   ): Promise<RefreshResult> {
     const key = `${refreshToken}\0${organizationId ?? ''}`;
     const existing = this.inflightRefreshes.get(key);
-    if (existing) return existing;
+    if (existing) {
+      return existing.catch(error => {
+        if (error instanceof TokenRefreshError) throw error;
+        // Any other rejection means the shared promise died with the request
+        // that created it (e.g. Cloudflare Workers cancels I/O when a request
+        // ends), so its cleanup never ran. Drop it and refresh in this request.
+        if (this.inflightRefreshes.get(key) === existing) {
+          this.inflightRefreshes.delete(key);
+        }
+        return this.refreshTokens(refreshToken, organizationId, context);
+      });
+    }
 
     const cleanup = () => {
       this.inflightRefreshes.delete(key);

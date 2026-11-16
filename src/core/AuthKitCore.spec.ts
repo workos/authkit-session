@@ -469,6 +469,43 @@ describe('AuthKitCore', () => {
       vi.useRealTimers();
     });
 
+    it('recovers when a shared refresh dies with the request that started it', async () => {
+      vi.useFakeTimers();
+      const { client, getCallCount } = makeCountingClient();
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+      // What Cloudflare Workers gives other requests awaiting a promise whose
+      // creating request has ended. Its cleanup never runs, so it stays in the map.
+      const inflight = (testCore as any).inflightRefreshes as Map<
+        string,
+        Promise<unknown>
+      >;
+      inflight.set(
+        'rt-1\0',
+        Promise.reject(new Error('created by a request that has since ended')),
+      );
+
+      const session = makeExpiredSession();
+      const pending = Promise.all([
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+      ]);
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
+
+      // Both waiters drop the dead entry and share one fresh refresh.
+      expect(getCallCount()).toBe(1);
+      for (const r of results) {
+        expect(r.refreshed).toBe(true);
+        expect(r.session.accessToken).toBe(newJwt);
+      }
+      expect(inflight.size).toBe(0);
+      vi.useRealTimers();
+    });
+
     it('deduplicates separately per organizationId', async () => {
       vi.useFakeTimers();
       const { client, getCallCount } = makeCountingClient();
