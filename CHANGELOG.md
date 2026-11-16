@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/workos/authkit-session/compare/v0.9.1...v0.9.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* point missing-config errors to npx workos@latest install ([#66](https://github.com/workos/authkit-session/issues/66)) ([236a00d](https://github.com/workos/authkit-session/commit/236a00d7a92395aa077c3decb437a3edbd8188ff))
+
 ## [0.9.1](https://github.com/workos/authkit-session/compare/v0.9.0...v0.9.1) (2026-11-05)
 
 
