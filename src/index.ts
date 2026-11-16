@@ -83,6 +83,11 @@ export {
   TokenValidationError,
   TokenRefreshError,
 } from './core/errors.js';
+export type {
+  RefreshFailure,
+  RefreshFailureReason,
+  TokenRefreshErrorContext,
+} from './core/errors.js';
 
 // ============================================
 // Type Exports

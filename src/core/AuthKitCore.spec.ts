@@ -1,4 +1,8 @@
-import { RateLimitExceededException } from '@workos-inc/node';
+import {
+  GenericServerException,
+  OauthException,
+  RateLimitExceededException,
+} from '@workos-inc/node';
 import { AuthKitCore } from './AuthKitCore.js';
 import { SessionEncryptionError, TokenRefreshError } from './errors.js';
 import sessionEncryption from './encryption/ironWebcryptoEncryption.js';
@@ -697,6 +701,136 @@ describe('AuthKitCore', () => {
         expect(r.accessToken).toBe(newJwt);
       }
       vi.useRealTimers();
+    });
+
+    describe('refresh failure classification', () => {
+      const invalidGrant = () =>
+        new OauthException(
+          400,
+          'req_1',
+          'invalid_grant',
+          'Session has already ended.',
+          {},
+        );
+
+      function coreThatThrows(error: unknown) {
+        const client = {
+          userManagement: {
+            getJwksUrl: () => 'https://api.workos.com/sso/jwks/test-client-id',
+            authenticateWithRefreshToken: async () => {
+              throw error;
+            },
+          },
+        };
+        return new AuthKitCore(
+          mockConfig as any,
+          client as any,
+          mockEncryption as any,
+        );
+      }
+
+      it('marks a 5xx as retryable server_error', async () => {
+        const error = await coreThatThrows(
+          new GenericServerException(503, 'Service Unavailable', {}, 'req_1'),
+        )
+          .refreshTokens('rt-1', undefined, {
+            userId: 'user_123',
+            sessionId: 'session_456',
+          })
+          .catch(e => e);
+
+        expect(error).toBeInstanceOf(TokenRefreshError);
+        expect(error.message).toBe('Failed to refresh tokens');
+        expect(error.retryable).toBe(true);
+        expect(error.reason).toBe('server_error');
+        expect(error.userId).toBe('user_123');
+        expect(error.sessionId).toBe('session_456');
+      });
+
+      it('marks invalid_grant as terminal', async () => {
+        const error = await coreThatThrows(invalidGrant())
+          .refreshTokens('rt-1')
+          .catch(e => e);
+
+        expect(error).toBeInstanceOf(TokenRefreshError);
+        expect(error.retryable).toBe(false);
+        expect(error.reason).toBe('invalid_grant');
+      });
+
+      it('marks a rate-limit retry that is rate-limited again as retryable', async () => {
+        vi.useFakeTimers();
+        const { client, getCallCount } = createRateLimitClient({
+          retryAfter: 1,
+          onRetry: 'rateLimit',
+        });
+        const testCore = new AuthKitCore(
+          mockConfig as any,
+          client as any,
+          mockEncryption as any,
+        );
+
+        const pending = testCore
+          .refreshTokens('rt-1', undefined, { userId: 'user_123' })
+          .catch(e => e);
+        await vi.advanceTimersByTimeAsync(1000);
+        const error = await pending;
+
+        expect(getCallCount()).toBe(2);
+        expect(error).toBeInstanceOf(TokenRefreshError);
+        expect(error.message).toContain('after rate-limit retry');
+        expect(error.retryable).toBe(true);
+        expect(error.reason).toBe('rate_limited');
+        expect(error.userId).toBe('user_123');
+        vi.useRealTimers();
+      });
+
+      it("classifies a failed rate-limit retry from the retry's error", async () => {
+        vi.useFakeTimers();
+        const { client } = createRateLimitClient({
+          retryAfter: 1,
+          onRetry: invalidGrant(),
+        });
+        const testCore = new AuthKitCore(
+          mockConfig as any,
+          client as any,
+          mockEncryption as any,
+        );
+
+        const pending = testCore.refreshTokens('rt-1').catch(e => e);
+        await vi.advanceTimersByTimeAsync(1000);
+        const error = await pending;
+
+        expect(error).toBeInstanceOf(TokenRefreshError);
+        expect(error.message).toContain('after rate-limit retry');
+        expect(error.retryable).toBe(false);
+        expect(error.reason).toBe('invalid_grant');
+        // The original rate-limit error is still on the cause chain.
+        expect((error.cause as Error).cause).toBeInstanceOf(
+          RateLimitExceededException,
+        );
+        vi.useRealTimers();
+      });
+
+      it('does not let the chained rate-limit error make an unknown retry error retryable', async () => {
+        vi.useFakeTimers();
+        const { client } = createRateLimitClient({
+          retryAfter: 1,
+          onRetry: new Error('x'),
+        });
+        const testCore = new AuthKitCore(
+          mockConfig as any,
+          client as any,
+          mockEncryption as any,
+        );
+
+        const pending = testCore.refreshTokens('rt-1').catch(e => e);
+        await vi.advanceTimersByTimeAsync(1000);
+        const error = await pending;
+
+        expect(error.retryable).toBe(false);
+        expect(error.reason).toBe('unknown');
+        vi.useRealTimers();
+      });
     });
   });
 
