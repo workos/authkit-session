@@ -63,6 +63,12 @@ describe('ConfigurationProvider', () => {
       );
     });
 
+    it('points to the installer when a required value is missing', () => {
+      expect(() => provider.getValue('clientId')).toThrow(
+        /WORKOS_CLIENT_ID\)\. .*npx workos@latest install/,
+      );
+    });
+
     it('converts boolean values from strings', () => {
       const source = vi.fn().mockReturnValue('false');
       provider.configure(source);
@@ -236,6 +242,10 @@ describe('ConfigurationProvider', () => {
       expect(() => provider.validate()).toThrow(
         /Get your values from the WorkOS Dashboard: https:\/\/dashboard\.workos\.com/,
       );
+    });
+
+    it('points agents to the installer, which needs no WorkOS account', () => {
+      expect(() => provider.validate()).toThrow(/npx workos@latest install/);
     });
 
     it('shows current length of invalid cookiePassword', () => {
