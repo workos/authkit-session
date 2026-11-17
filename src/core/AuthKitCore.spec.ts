@@ -469,6 +469,35 @@ describe('AuthKitCore', () => {
       vi.useRealTimers();
     });
 
+    it('does not share refreshes across requests on Cloudflare Workers', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('navigator', { userAgent: 'Cloudflare-Workers' });
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      });
+      const { client, getCallCount } = makeCountingClient();
+      const testCore = new AuthKitCore(
+        mockConfig as any,
+        client as any,
+        mockEncryption as any,
+      );
+
+      const session = makeExpiredSession();
+      const pending = Promise.all([
+        testCore.validateAndRefresh(session),
+        testCore.validateAndRefresh(session),
+      ]);
+      await vi.advanceTimersByTimeAsync(50);
+      const results = await pending;
+
+      expect(getCallCount()).toBe(2);
+      for (const r of results) {
+        expect(r.refreshed).toBe(true);
+      }
+      expect((testCore as any).inflightRefreshes.size).toBe(0);
+    });
+
     it('deduplicates separately per organizationId', async () => {
       vi.useFakeTimers();
       const { client, getCallCount } = makeCountingClient();
