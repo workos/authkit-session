@@ -472,6 +472,10 @@ describe('AuthKitCore', () => {
     it('does not share refreshes across requests on Cloudflare Workers', async () => {
       vi.useFakeTimers();
       vi.stubGlobal('navigator', { userAgent: 'Cloudflare-Workers' });
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      });
       const { client, getCallCount } = makeCountingClient();
       const testCore = new AuthKitCore(
         mockConfig as any,
@@ -492,8 +496,6 @@ describe('AuthKitCore', () => {
         expect(r.refreshed).toBe(true);
       }
       expect((testCore as any).inflightRefreshes.size).toBe(0);
-      vi.unstubAllGlobals();
-      vi.useRealTimers();
     });
 
     it('deduplicates separately per organizationId', async () => {
