@@ -74,3 +74,10 @@ export function sanitizeReturnPathname(
   }
   return '/';
 }
+
+export function isCloudflareWorkers(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent === 'Cloudflare-Workers'
+  );
+}

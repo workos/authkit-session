@@ -10,7 +10,7 @@ import {
   jwtVerify,
   type JWTPayload,
 } from 'jose';
-import { constantTimeEqual, once } from '../utils.js';
+import { constantTimeEqual, isCloudflareWorkers, once } from '../utils.js';
 import type { AuthKitConfig } from './config/types.js';
 import {
   OAuthStateMismatchError,
@@ -312,8 +312,13 @@ export class AuthKitCore {
       }
     })();
 
-    this.inflightRefreshes.set(key, promise);
-    promise.then(cleanup, cleanup);
+    // Cloudflare Workers ties I/O to the request that started it, so another
+    // request awaiting this promise would hang or throw once that request ends.
+    // Only share refreshes elsewhere (same check jose uses for its JWKS fetch).
+    if (!isCloudflareWorkers()) {
+      this.inflightRefreshes.set(key, promise);
+      promise.then(cleanup, cleanup);
+    }
     return promise;
   }
 
